@@ -1972,6 +1972,10 @@
       "removeSuccess": "Configuração de IA removida.",
       "removeFailed": "Falha ao remover.",
       "providerOpenAiCompatible": "API compatível com OpenAI",
+      "providerOpenRouter": "OpenRouter",
+      "openRouterModelHint": "Digite para buscar qualquer modelo do OpenRouter ou cole o ID dele (por exemplo openai/gpt-4o-mini). Crie sua chave em openrouter.ai/keys.",
+      "openRouterModelsFailed": "Não foi possível carregar a lista de modelos do OpenRouter; você ainda pode digitar o ID do modelo manualmente.",
+      "keyForNewProviderRequired": "Informe a chave de API deste provedor: a chave armazenada pertence a outro.",
       "baseUrl": "URL base",
       "baseUrlHint": "URL base da API compatível com OpenAI, por exemplo https://api.groq.com/openai/v1. O caminho /chat/completions é adicionado automaticamente, a menos que você informe esse caminho.",
       "missingBaseUrl": "Informe a URL base da API compatível com OpenAI."
@@ -2581,6 +2585,7 @@
       "updateConversationFailed": "Falha ao atualizar a conversa",
       "loadConfigFailed": "Falha ao carregar a configuração de IA",
       "providerInvalid": "O provedor deve ser \"openai\", \"anthropic\" ou \"openai_compatible\"",
+      "openRouterModelsFailed": "Não foi possível carregar a lista de modelos do OpenRouter.",
       "baseUrlRequired": "base_url é obrigatório para openai_compatible",
       "baseUrlInvalid": "base_url deve ser uma URL http(s) válida",
       "modelRequired": "O modelo é obrigatório",

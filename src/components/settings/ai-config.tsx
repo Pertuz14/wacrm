@@ -27,6 +27,12 @@ import {
 import { SettingsPanelHead } from './settings-panel-head';
 import { AiKnowledgeCard } from './ai-knowledge';
 import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
+import {
+  OPENROUTER_BASE_URL,
+  OPENROUTER_EXAMPLE_MODEL,
+  isOpenRouterBaseUrl,
+  type OpenRouterModel,
+} from '@/lib/ai/openrouter';
 import type { AiProvider } from '@/lib/ai/types';
 import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
@@ -49,6 +55,11 @@ const KEY_PLACEHOLDER: Record<AiProvider, string> = {
   openai_compatible: 'your-api-key',
 };
 
+// What the provider dropdown offers. OpenRouter is a UI-level choice only:
+// it is persisted as `openai_compatible` + OpenRouter's base URL (see
+// src/lib/ai/openrouter.ts), so the backend and schema don't change.
+type ProviderChoice = AiProvider | 'openrouter';
+
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
@@ -63,6 +74,17 @@ export function AiConfig() {
   const [provider, setProvider] = useState<AiProvider>('openai');
   const [model, setModel] = useState(AI_PROVIDER_DEFAULT_MODEL.openai);
   const [baseUrl, setBaseUrl] = useState('');
+  // OpenRouter is explicit state (not derived from baseUrl) so typing a
+  // custom URL that merely starts with openrouter.ai can't flip the form.
+  const [useOpenRouter, setUseOpenRouter] = useState(false);
+  // Whether the SAVED config is on OpenRouter. The stored key belongs to
+  // the provider it was saved under, so when the form differs from it the
+  // key must be re-entered — otherwise the server would reuse the stored
+  // key and send it to a different provider.
+  const [savedUseOpenRouter, setSavedUseOpenRouter] = useState(false);
+  const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>([]);
+  const [openRouterModelsFailed, setOpenRouterModelsFailed] = useState(false);
+  const openRouterModelsRequested = useRef(false);
   const [apiKey, setApiKey] = useState('');
   const [keyEdited, setKeyEdited] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -98,6 +120,10 @@ export function AiConfig() {
         setProvider(data.provider);
         setModel(data.model);
         setBaseUrl(data.base_url ?? '');
+        const onOpenRouter =
+          data.provider === 'openai_compatible' && isOpenRouterBaseUrl(data.base_url);
+        setUseOpenRouter(onOpenRouter);
+        setSavedUseOpenRouter(onOpenRouter);
         setSystemPrompt(data.system_prompt ?? '');
         setIsActive(data.is_active);
         setAutoReplyEnabled(data.auto_reply_enabled);
@@ -127,17 +153,52 @@ export function AiConfig() {
     void fetchAccountMembers().then(setMembers);
   }, [accountId, fetchConfig]);
 
+  // Load OpenRouter's model catalogue (for the search suggestions) the
+  // first time the form is on OpenRouter. Best-effort: on failure the
+  // model field still accepts a hand-typed id.
+  useEffect(() => {
+    if (!useOpenRouter || !canEdit || openRouterModelsRequested.current) return;
+    openRouterModelsRequested.current = true;
+    fetch('/api/ai/openrouter-models')
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.models)) throw new Error('bad response');
+        setOpenRouterModels(data.models);
+        setOpenRouterModelsFailed(false);
+      })
+      .catch(() => {
+        openRouterModelsRequested.current = false; // retry next time
+        setOpenRouterModelsFailed(true);
+      });
+  }, [useOpenRouter, canEdit]);
+
   // Swap the model default when the provider changes, unless the user
   // typed a custom model.
-  const handleProviderChange = (next: AiProvider) => {
-    setProvider(next);
+  const handleProviderChange = (next: ProviderChoice) => {
+    const nextProvider: AiProvider = next === 'openrouter' ? 'openai_compatible' : next;
+    const leavingOrEnteringOpenRouter = useOpenRouter !== (next === 'openrouter');
+
+    setProvider(nextProvider);
+    setUseOpenRouter(next === 'openrouter');
+    if (next === 'openrouter') setBaseUrl(OPENROUTER_BASE_URL);
+    else if (useOpenRouter) setBaseUrl('');
+
     const isDefaultModel =
       model === AI_PROVIDER_DEFAULT_MODEL.openai ||
       model === AI_PROVIDER_DEFAULT_MODEL.anthropic ||
       model === AI_PROVIDER_DEFAULT_MODEL.openai_compatible ||
       model.trim() === '';
-    if (isDefaultModel) setModel(next === 'openai_compatible' ? '' : AI_PROVIDER_DEFAULT_MODEL[next]);
+    // A model id from one provider is meaningless on another, so moving
+    // to or from OpenRouter always resets it.
+    if (isDefaultModel || leavingOrEnteringOpenRouter) {
+      setModel(nextProvider === 'openai_compatible' ? '' : AI_PROVIDER_DEFAULT_MODEL[nextProvider]);
+    }
   };
+
+  // The stored key can't be reused for what is on screen (it was saved
+  // under a different provider) and no replacement has been typed yet.
+  const keyStale = hasStoredKey && useOpenRouter !== savedUseOpenRouter;
+  const needsNewKey = () => keyStale && !(keyEdited && apiKey.trim());
 
   const keyPayload = () => (keyEdited ? apiKey.trim() : undefined);
 
@@ -159,6 +220,10 @@ export function AiConfig() {
   });
 
   const handleTest = async () => {
+    if (needsNewKey()) {
+      toast.error(t('keyForNewProviderRequired'));
+      return;
+    }
     setTesting(true);
     try {
       const res = await fetch('/api/ai/test', {
@@ -194,6 +259,10 @@ export function AiConfig() {
       toast.error(t('missingApiKey'));
       return;
     }
+    if (needsNewKey()) {
+      toast.error(t('keyForNewProviderRequired'));
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/ai/config', {
@@ -223,6 +292,8 @@ export function AiConfig() {
         toast.success(t('removeSuccess'));
         setConfigured(false);
         setBaseUrl('');
+        setUseOpenRouter(false);
+        setSavedUseOpenRouter(false);
         setHasStoredKey(false);
         setApiKey('');
         setKeyEdited(false);
@@ -280,8 +351,8 @@ export function AiConfig() {
               <div className="space-y-2">
                 <Label>{t('provider')}</Label>
                 <Select
-                  value={provider}
-                  onValueChange={(v) => handleProviderChange(v as AiProvider)}
+                  value={useOpenRouter ? 'openrouter' : provider}
+                  onValueChange={(v) => handleProviderChange(v as ProviderChoice)}
                   disabled={disabled}
                 >
                   <SelectTrigger>
@@ -291,6 +362,9 @@ export function AiConfig() {
                     <SelectItem value="openai">{PROVIDER_LABEL.openai}</SelectItem>
                     <SelectItem value="anthropic">
                       {PROVIDER_LABEL.anthropic}
+                    </SelectItem>
+                    <SelectItem value="openrouter">
+                      {t('providerOpenRouter')}
                     </SelectItem>
                     <SelectItem value="openai_compatible">
                       {t('providerOpenAiCompatible')}
@@ -305,12 +379,35 @@ export function AiConfig() {
                   id="ai-model"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
+                  placeholder={
+                    useOpenRouter
+                      ? OPENROUTER_EXAMPLE_MODEL
+                      : AI_PROVIDER_DEFAULT_MODEL[provider]
+                  }
+                  list={useOpenRouter ? 'ai-openrouter-models' : undefined}
                   disabled={disabled}
+                  autoComplete="off"
                 />
+                {useOpenRouter && (
+                  <>
+                    {/* Native suggestions: type to filter, or paste any id. */}
+                    <datalist id="ai-openrouter-models">
+                      {openRouterModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </datalist>
+                    <p className="text-xs text-muted-foreground">
+                      {openRouterModelsFailed
+                        ? t('openRouterModelsFailed')
+                        : t('openRouterModelHint')}
+                    </p>
+                  </>
+                )}
               </div>
 
-              {provider === 'openai_compatible' && (
+              {provider === 'openai_compatible' && !useOpenRouter && (
                 <div className="space-y-2">
                   <Label htmlFor="ai-base-url">{t('baseUrl')}</Label>
                   <Input
@@ -344,7 +441,7 @@ export function AiConfig() {
                         setKeyEdited(true);
                       }
                     }}
-                    placeholder={KEY_PLACEHOLDER[provider]}
+                    placeholder={useOpenRouter ? 'sk-or-...' : KEY_PLACEHOLDER[provider]}
                     disabled={disabled}
                     autoComplete="off"
                   />
@@ -374,6 +471,11 @@ export function AiConfig() {
                   {t('testKey')}
                 </Button>
               </div>
+              {keyStale && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t('keyForNewProviderRequired')}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
