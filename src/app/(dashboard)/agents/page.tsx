@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, Sparkles, Settings2, BarChart3 } from 'lucide-react';
+import { Bot, Sparkles, Settings2, BarChart3, Banknote } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AiPlayground } from '@/components/agents/ai-playground';
 import { AiUsageCard } from '@/components/agents/ai-usage';
+import { AiPricing } from '@/components/agents/ai-pricing';
 import { AiConfig } from '@/components/settings/ai-config';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 
-type Tab = 'playground' | 'setup' | 'usage';
+type Tab = 'playground' | 'setup' | 'pricing' | 'usage';
 
 export default function AgentsPage() {
   const t = useTranslations('Agents');
@@ -64,6 +65,11 @@ export default function AgentsPage() {
               <Settings2 className="mr-1.5 h-4 w-4" /> {t('tabSetup')}
             </TabsTrigger>
             {canViewUsage && (
+              <TabsTrigger value="pricing">
+                <Banknote className="mr-1.5 h-4 w-4" /> {t('tabPricing')}
+              </TabsTrigger>
+            )}
+            {canViewUsage && (
               <TabsTrigger value="usage">
                 <BarChart3 className="mr-1.5 h-4 w-4" /> {t('tabUsage')}
               </TabsTrigger>
@@ -77,6 +83,12 @@ export default function AgentsPage() {
           <TabsContent value="setup" className="mt-4">
             <AiConfig />
           </TabsContent>
+
+          {canViewUsage && (
+            <TabsContent value="pricing" className="mt-4">
+              <AiPricing />
+            </TabsContent>
+          )}
 
           {canViewUsage && (
             <TabsContent value="usage" className="mt-4">

@@ -3,8 +3,12 @@ import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
 import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
-import { buildSystemPrompt } from './defaults'
+import { aiReplyDebounceMs, buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
+import { loadPromptVariables } from './exchange-rate'
+import { applyTemplateVariables } from './pricing'
+import { hasAction, parseBotOutput } from './bot-output'
+import { alertHandoff, alertPaymentToVerify } from './bot-alerts'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import {
@@ -120,26 +124,42 @@ export async function dispatchInboundToAiReply(
     // best-effort: a failed indicator must never cost us the reply.
     if (inboundMessageId) {
       await showTypingIndicator(db, accountId, inboundMessageId)
+      // Customers often send several messages in a row (the receipt, then
+      // the registration form). Answer once, with all of them in view: if
+      // a newer message arrives during the pause, its own dispatch replies.
+      if (!(await isLatestCustomerMessage(db, conversationId, inboundMessageId))) return
     }
+
+    // The pause above may have let more messages in — read the thread now.
+    const transcript = inboundMessageId
+      ? await buildConversationContext(db, conversationId)
+      : messages
+    if (transcript.length === 0) return
 
     // Ground the reply in the account's knowledge base (best-effort).
     const knowledge = await retrieveKnowledge(
       db,
       accountId,
       config,
-      latestUserMessage(messages),
+      latestUserMessage(transcript),
     )
 
-    const systemPrompt = buildSystemPrompt({
-      userPrompt: config.systemPrompt,
-      mode: 'auto_reply',
-      knowledge,
-    })
+    // Prices in Bs at today's BCV rate etc. are substituted into the
+    // prompt here, so the model copies amounts instead of computing them.
+    const variables = await loadPromptVariables(db, accountId)
+    const systemPrompt = applyTemplateVariables(
+      buildSystemPrompt({
+        userPrompt: config.systemPrompt,
+        mode: 'auto_reply',
+        knowledge,
+      }),
+      variables,
+    )
 
-    const { text, handoff, usage } = await generateReply({
+    const { text, handoff: sentinelHandoff, usage } = await generateReply({
       config,
       systemPrompt,
-      messages,
+      messages: transcript,
     })
 
     // Record token spend on the account's BYO key. Fire-and-forget so it
@@ -156,16 +176,66 @@ export async function dispatchInboundToAiReply(
       usage,
     })
 
-    if (handoff || !text) {
-      // The model can't (or shouldn't) answer — stop auto-replying on
-      // this thread and hand it to a human. We (a) pause the bot here
+    // Split into the customer-facing messages and the control tags the
+    // prompt may emit (handoff, payment to verify, registration data).
+    const { messages: parts, actions } = parseBotOutput(text)
+    const handoffAction = hasAction(actions, 'handoff')
+    const handoff = sentinelHandoff || Boolean(handoffAction)
+    const target = { accountId, conversationId, contactId }
+
+    if (parts.length > 0) {
+      // Atomically claim a reply slot: the cap check + increment happen in
+      // one UPDATE, so concurrent inbounds can never overshoot the cap. If
+      // another inbound just took the last slot, `claimed` is false and we
+      // skip the send. (We consume a slot slightly before the send lands —
+      // fail-safe: under-reply rather than over-reply.) One slot covers
+      // every message of this turn.
+      const { data: claimed, error: claimErr } = await db.rpc(
+        'claim_ai_reply_slot',
+        {
+          conversation_id: conversationId,
+          max_replies: config.autoReplyMaxPerConversation,
+        },
+      )
+      if (claimErr) {
+        // A real error here (vs. losing the cap race) is almost always a
+        // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
+        // service role, or the migration not applied. Log it loudly: a
+        // silent return makes "auto-reply never fires" undiagnosable.
+        console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
+        return
+      }
+      if (claimed !== true) return // lost the per-conversation cap race
+
+      // Sequential, with a short gap, so the bubbles arrive in order.
+      for (let i = 0; i < parts.length; i++) {
+        if (i > 0) await sleep(MESSAGE_GAP_MS)
+        await engineSendText({
+          accountId,
+          userId: configOwnerUserId,
+          conversationId,
+          contactId,
+          text: parts[i],
+          aiGenerated: true,
+        })
+      }
+    }
+
+    if (hasAction(actions, 'verify_payment')) {
+      await alertPaymentToVerify(db, target, hasAction(actions, 'registro')?.fields ?? null)
+    }
+
+    if (handoff || parts.length === 0) {
+      // The model can't (or shouldn't) keep answering — stop auto-replying
+      // on this thread and hand it to a human. We (a) pause the bot here
       // (sticky until re-enabled), (b) route the conversation to the
       // configured handoff agent — null leaves it in the shared queue —
       // and (c) leave a short internal note so whoever picks it up has
       // context. Assigning fires the `on_conversation_assigned` trigger,
-      // which notifies the agent.
+      // which notifies the agent. Any goodbye message the model wrote
+      // ("a person will help you shortly") was already sent above.
       const summary = buildHandoffSummary({
-        messages,
+        messages: transcript,
         replyCount: conv.ai_reply_count ?? 0,
       })
       const update: Record<string, unknown> = {
@@ -178,41 +248,59 @@ export async function dispatchInboundToAiReply(
         update.assigned_agent_id = config.handoffAgentId
       }
       await db.from('conversations').update(update).eq('id', conversationId)
-      return
+      await alertHandoff(db, target, handoffAction?.reason ?? null)
     }
-
-    // Atomically claim a reply slot: the cap check + increment happen in
-    // one UPDATE, so concurrent inbounds can never overshoot the cap. If
-    // another inbound just took the last slot, `claimed` is false and we
-    // skip the send. (We consume a slot slightly before the send lands —
-    // fail-safe: under-reply rather than over-reply.)
-    const { data: claimed, error: claimErr } = await db.rpc(
-      'claim_ai_reply_slot',
-      {
-        conversation_id: conversationId,
-        max_replies: config.autoReplyMaxPerConversation,
-      },
-    )
-    if (claimErr) {
-      // A real error here (vs. losing the cap race) is almost always a
-      // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
-      // service role, or the migration not applied. Log it loudly: a
-      // silent return makes "auto-reply never fires" undiagnosable.
-      console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
-      return
-    }
-    if (claimed !== true) return // lost the per-conversation cap race
-
-    await engineSendText({
-      accountId,
-      userId: configOwnerUserId,
-      conversationId,
-      contactId,
-      text,
-      aiGenerated: true,
-    })
   } catch (err) {
     console.error('[ai auto-reply] dispatch failed:', err)
+  }
+}
+
+/** Pause between the messages of one turn so WhatsApp keeps their order. */
+const MESSAGE_GAP_MS = 700
+
+/** Inbound content types that trigger their own auto-reply dispatch
+ *  (see the webhook). A newer one of these supersedes an older dispatch. */
+const DISPATCHING_CONTENT_TYPES = ['text', 'image', 'audio', 'video', 'document']
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Wait the debounce window, then report whether this inbound is still the
+ * customer's latest message. False means a newer message arrived; its own
+ * dispatch will answer with the whole burst in view. Fails open (true) on
+ * any lookup problem — a missed debounce is better than no reply.
+ */
+async function isLatestCustomerMessage(
+  db: ReturnType<typeof supabaseAdmin>,
+  conversationId: string,
+  inboundMessageId: string,
+): Promise<boolean> {
+  const debounceMs = aiReplyDebounceMs()
+  if (debounceMs <= 0) return true
+  try {
+    const { data: own } = await db
+      .from('messages')
+      .select('created_at')
+      .eq('conversation_id', conversationId)
+      .eq('message_id', inboundMessageId)
+      .limit(1)
+    const createdAt = (own as { created_at: string }[] | null)?.[0]?.created_at
+    await sleep(debounceMs)
+    if (!createdAt) return true
+    const { data: newer } = await db
+      .from('messages')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('sender_type', 'customer')
+      .in('content_type', DISPATCHING_CONTENT_TYPES)
+      .gt('created_at', createdAt)
+      .limit(1)
+    return !(newer && newer.length > 0)
+  } catch (err) {
+    console.warn('[ai auto-reply] debounce check failed (replying anyway):', err)
+    return true
   }
 }
 

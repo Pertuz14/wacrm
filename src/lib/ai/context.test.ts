@@ -3,12 +3,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildConversationContext } from './context'
 
 /** Minimal fake matching the query chain in buildConversationContext:
- *  from().select().eq().eq().order().limit() → { data, error }. */
+ *  from().select().eq().in().order().limit() → { data, error }. */
 function fakeDb(rows: unknown[]): SupabaseClient {
   const chain = {
     from: () => chain,
     select: () => chain,
     eq: () => chain,
+    in: () => chain,
     order: () => chain,
     limit: () => Promise.resolve({ data: rows, error: null }),
   }
@@ -49,5 +50,43 @@ describe('buildConversationContext', () => {
       'conv-1',
     )
     expect(out).toEqual([{ role: 'user', content: 'real' }])
+  })
+
+  it('shows media as placeholders so the model knows a receipt arrived', async () => {
+    const out = await buildConversationContext(
+      fakeDb([
+        { sender_type: 'customer', content_type: 'text', content_text: 'REGISTRO ...' },
+        { sender_type: 'customer', content_type: 'image', content_text: null },
+        { sender_type: 'customer', content_type: 'audio', content_text: null },
+      ]),
+      'conv-1',
+    )
+    expect(out).toEqual([
+      { role: 'user', content: '[The customer sent a voice note / audio]' },
+      { role: 'user', content: '[The customer sent an image]' },
+      { role: 'user', content: 'REGISTRO ...' },
+    ])
+  })
+
+  it('keeps a media caption and labels outbound media neutrally', async () => {
+    const out = await buildConversationContext(
+      fakeDb([
+        { sender_type: 'agent', content_type: 'document', content_text: 'guia.pdf' },
+        { sender_type: 'customer', content_type: 'image', content_text: 'ya pagué' },
+      ]),
+      'conv-1',
+    )
+    expect(out).toEqual([
+      { role: 'user', content: '[The customer sent an image with the caption: "ya pagué"]' },
+      { role: 'assistant', content: '[Sent a document with the caption: "guia.pdf"]' },
+    ])
+  })
+
+  it('skips content types the model cannot use', async () => {
+    const out = await buildConversationContext(
+      fakeDb([{ sender_type: 'bot', content_type: 'template', content_text: 'x' }]),
+      'conv-1',
+    )
+    expect(out).toEqual([])
   })
 })

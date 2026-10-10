@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { AiConfig } from './types'
 
 // Shared, hoisted mock state so the module mocks can close over it.
@@ -10,12 +10,18 @@ const h = vi.hoisted(() => ({
   engineSendText: vi.fn(),
   loadAccountMetaCredentials: vi.fn(),
   sendTypingIndicator: vi.fn(),
+  loadPromptVariables: vi.fn(),
+  alertPaymentToVerify: vi.fn(),
+  alertHandoff: vi.fn(),
   state: {
     conv: null as Record<string, unknown> | null,
     autoResponders: [] as { id: string }[],
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
     rpcCalls: [] as { name: string; args: unknown }[],
+    /** Debounce lookups: the inbound's own row, then newer messages. */
+    ownMessage: [{ created_at: '2026-10-10T12:00:00Z' }] as { created_at: string }[],
+    newerMessages: [] as { id: string }[],
   },
 }))
 
@@ -23,6 +29,11 @@ vi.mock('./config', () => ({ loadAiConfig: h.loadAiConfig }))
 vi.mock('./context', () => ({ buildConversationContext: h.buildConversationContext }))
 vi.mock('./knowledge', () => ({ retrieveKnowledge: h.retrieveKnowledge }))
 vi.mock('./generate', () => ({ generateReply: h.generateReply }))
+vi.mock('./exchange-rate', () => ({ loadPromptVariables: h.loadPromptVariables }))
+vi.mock('./bot-alerts', () => ({
+  alertPaymentToVerify: h.alertPaymentToVerify,
+  alertHandoff: h.alertHandoff,
+}))
 vi.mock('@/lib/flows/meta-send', () => ({
   engineSendText: h.engineSendText,
   loadAccountMetaCredentials: h.loadAccountMetaCredentials,
@@ -33,6 +44,26 @@ vi.mock('@/lib/whatsapp/meta-api', () => ({
 vi.mock('./admin-client', () => ({
   supabaseAdmin: () => ({
     from: (table: string) => {
+      if (table === 'messages') {
+        // Debounce: .select().eq().eq().limit() → own row;
+        // .select().eq().eq().in().gt().limit() → newer customer messages.
+        let wantsNewer = false
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          in: () => chain,
+          gt: () => {
+            wantsNewer = true
+            return chain
+          },
+          limit: () =>
+            Promise.resolve({
+              data: wantsNewer ? h.state.newerMessages : h.state.ownMessage,
+              error: null,
+            }),
+        }
+        return chain
+      }
       if (table === 'automations') {
         // .select().eq().eq().in().limit() → active auto-responders
         const chain = {
@@ -92,6 +123,17 @@ function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
 }
 
 beforeEach(() => {
+  // No pause by default; the debounce tests opt in.
+  process.env.AI_REPLY_DEBOUNCE_MS = '0'
+  h.state.ownMessage = [{ created_at: '2026-10-10T12:00:00Z' }]
+  h.state.newerMessages = []
+  h.loadPromptVariables.mockResolvedValue({})
+  h.alertPaymentToVerify.mockReset()
+  h.alertHandoff.mockReset()
+  h.engineSendText.mockReset()
+  h.generateReply.mockReset()
+  h.sendTypingIndicator.mockReset()
+  h.loadAccountMetaCredentials.mockReset()
   h.state.conv = {
     assigned_agent_id: null,
     ai_autoreply_disabled: false,
@@ -290,5 +332,93 @@ describe('dispatchInboundToAiReply — handoff', () => {
       ai_autoreply_disabled: true,
       assigned_agent_id: 'agent-7',
     })
+  })
+
+  it('sends the goodbye message, then hands off on [[ACCION:PASAR_A_HUMANO]]', async () => {
+    h.generateReply.mockResolvedValue({
+      text: 'Le paso con una persona.\n[[ACCION:PASAR_A_HUMANO|motivo=descuento]]',
+      handoff: false,
+    })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalledTimes(1)
+    expect(h.engineSendText.mock.calls[0][0].text).toBe('Le paso con una persona.')
+    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
+    expect(h.alertHandoff).toHaveBeenCalledWith(
+      expect.anything(),
+      { accountId: 'acct-1', conversationId: 'conv-1', contactId: 'contact-1' },
+      'descuento',
+    )
+  })
+})
+
+describe('dispatchInboundToAiReply — multi-message replies and actions', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('sends each [[NUEVO_MENSAJE]] part as its own message, in order, for one slot', async () => {
+    h.generateReply.mockResolvedValue({
+      text: 'Resumen\n[[NUEVO_MENSAJE]]\n19684857\n04129558222\n[[NUEVO_MENSAJE]]\n*REGISTRO*',
+      handoff: false,
+    })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.state.rpcCalls).toHaveLength(1)
+    expect(h.engineSendText.mock.calls.map((c) => c[0].text)).toEqual([
+      'Resumen',
+      '19684857\n04129558222',
+      '*REGISTRO*',
+    ])
+  })
+
+  it('never sends control tags to the customer', async () => {
+    h.generateReply.mockResolvedValue({
+      text: '¡Gracias! 🙌\n[[ETIQUETA:pago_por_verificar]]',
+      handoff: false,
+    })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText.mock.calls[0][0].text).toBe('¡Gracias! 🙌')
+    expect(h.state.updatePayload).toBeNull()
+  })
+
+  it('raises a payment alert with the registration fields', async () => {
+    h.generateReply.mockResolvedValue({
+      text: '¡Gracias! Estamos verificando.\n[[ACCION:VERIFICAR_PAGO]]\n[[REGISTRO|nombre=Ana|correo=ana@x.com|ref6=123456]]',
+      handoff: false,
+    })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalledTimes(1)
+    expect(h.alertPaymentToVerify).toHaveBeenCalledWith(
+      expect.anything(),
+      { accountId: 'acct-1', conversationId: 'conv-1', contactId: 'contact-1' },
+      { nombre: 'Ana', correo: 'ana@x.com', ref6: '123456' },
+    )
+    // A payment to verify does not pause the bot.
+    expect(h.state.updatePayload).toBeNull()
+  })
+
+  it('substitutes price variables into the system prompt', async () => {
+    h.loadAiConfig.mockResolvedValue(
+      aiConfig({ systemPrompt: 'Tasa {{TASA_BCV}} · Paquete {{P_PAQUETE_BS}} Bs · {{DESCONOCIDA}}' }),
+    )
+    h.loadPromptVariables.mockResolvedValue({ TASA_BCV: '875,65', P_PAQUETE_BS: '43.782,53' })
+    await dispatchInboundToAiReply(ARGS)
+    const systemPrompt = h.generateReply.mock.calls[0][0].systemPrompt as string
+    expect(systemPrompt).toContain('Tasa 875,65 · Paquete 43.782,53 Bs · {{DESCONOCIDA}}')
+  })
+
+  it('stands down when a newer customer message arrived during the pause', async () => {
+    process.env.AI_REPLY_DEBOUNCE_MS = '1'
+    h.state.newerMessages = [{ id: 'msg-newer' }]
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('answers after the pause when no newer message arrived', async () => {
+    process.env.AI_REPLY_DEBOUNCE_MS = '1'
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalledTimes(1)
+    // The thread is re-read after the pause so late messages are included.
+    expect(h.buildConversationContext).toHaveBeenCalledTimes(2)
   })
 })

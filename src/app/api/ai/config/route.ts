@@ -10,6 +10,7 @@ import { validateAiCredentials } from '@/lib/ai/validate'
 import { embedTexts } from '@/lib/ai/embeddings'
 import { AiError, type AiProvider } from '@/lib/ai/types'
 import { normalizeOpenAiCompatibleBaseUrl } from '@/lib/ai/providers/openai-compatible'
+import { MAX_AUTO_REPLIES_PER_CONVERSATION } from '@/lib/ai/defaults'
 import { getT } from '@/lib/i18n/translate'
 
 const t = getT('Api')
@@ -100,7 +101,8 @@ export async function POST(request: Request) {
 
     let maxPer = Number(body.auto_reply_max_per_conversation)
     if (!Number.isFinite(maxPer)) maxPer = 3
-    maxPer = Math.min(20, Math.max(1, Math.floor(maxPer)))
+    // Ceiling matches the CHECK constraint (widened in migration 047).
+    maxPer = Math.min(MAX_AUTO_REPLIES_PER_CONVERSATION, Math.max(1, Math.floor(maxPer)))
 
     // Handoff routing target for auto-reply. A non-empty string must be a
     // member of this account (else the conversation would be assigned to a

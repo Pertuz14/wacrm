@@ -9,6 +9,9 @@ import { buildSystemPrompt } from '@/lib/ai/defaults'
 import { latestUserMessage } from '@/lib/ai/query'
 import { logAiUsage } from '@/lib/ai/usage'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
+import { loadPromptVariables } from '@/lib/ai/exchange-rate'
+import { applyTemplateVariables } from '@/lib/ai/pricing'
+import { parseBotOutput } from '@/lib/ai/bot-output'
 import { AiError } from '@/lib/ai/types'
 import { getT } from '@/lib/i18n/translate'
 
@@ -101,11 +104,22 @@ export async function POST(request: Request) {
       latestUserMessage(messages),
     )
 
-    const systemPrompt = buildSystemPrompt({
-      userPrompt: config.systemPrompt,
-      mode: 'draft',
-      knowledge,
-    })
+    // Same price substitution as the live bot (service role: only it may
+    // store a refreshed rate; tenancy comes from requireRole above).
+    let variables: Record<string, string> = {}
+    try {
+      variables = await loadPromptVariables(supabaseAdmin(), accountId)
+    } catch (err) {
+      console.error('[ai/draft] prompt variables skipped:', err)
+    }
+    const systemPrompt = applyTemplateVariables(
+      buildSystemPrompt({
+        userPrompt: config.systemPrompt,
+        mode: 'draft',
+        knowledge,
+      }),
+      variables,
+    )
 
     const { text, usage } = await generateReply({ config, systemPrompt, messages })
 
@@ -129,7 +143,9 @@ export async function POST(request: Request) {
       console.error('[ai/draft] usage log skipped:', logErr)
     }
 
-    return NextResponse.json({ draft: text })
+    // A draft lands in the composer as one editable text: join the parts
+    // and drop control tags (the agent decides what to send).
+    return NextResponse.json({ draft: parseBotOutput(text).messages.join('\n\n') })
   } catch (err) {
     if (err instanceof AiError) {
       return NextResponse.json(
