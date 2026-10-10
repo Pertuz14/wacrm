@@ -2186,6 +2186,7 @@
       "sourceDolarapi": "DolarApi (BCV 공식)",
       "sourceManual": "수동 설정",
       "lastChecked": "{time} 확인",
+      "fallbackWarning": "⚠️ BCV 웹사이트를 읽지 못해 DolarApi의 현재 적용 환율을 표시합니다. BCV가 마지막으로 발표한 환율보다 낮을 수 있습니다. “지금 업데이트”를 누르거나 환율을 직접 입력하세요.",
       "noRate": "아직 환율이 없습니다. 이 페이지를 저장해 가져오거나, 자동 업데이트를 끄고 직접 입력하세요.",
       "autoUpdate": "BCV에서 자동 업데이트",
       "autoUpdateDesc": "끄면 환율을 직접 입력할 수 있습니다.",

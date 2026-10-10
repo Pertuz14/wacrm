@@ -2186,6 +2186,7 @@
       "sourceDolarapi": "DolarApi (official BCV)",
       "sourceManual": "set manually",
       "lastChecked": "checked {time}",
+      "fallbackWarning": "⚠️ The BCV website could not be read, so this is the rate in force from DolarApi — it can be lower than the latest one the BCV published. Press “Update now” or set the rate manually.",
       "noRate": "No rate yet. Save this page to fetch it, or turn off automatic updates and type it.",
       "autoUpdate": "Update automatically from the BCV",
       "autoUpdateDesc": "Turn off to type the rate yourself.",

@@ -280,6 +280,11 @@ export function AiPricing() {
                   .filter(Boolean)
                   .join(' · ')}
               </p>
+              {data.auto_update && data.rate_source === 'dolarapi' && (
+                <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  {t('fallbackWarning')}
+                </p>
+              )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">{t('noRate')}</p>

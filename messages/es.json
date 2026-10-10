@@ -2186,6 +2186,7 @@
       "sourceDolarapi": "DolarApi (oficial BCV)",
       "sourceManual": "fijada a mano",
       "lastChecked": "revisada {time}",
+      "fallbackWarning": "⚠️ No se pudo leer la página del BCV, así que esta es la tasa vigente de DolarApi: puede ser más baja que la última publicada por el BCV. Pulsa “Actualizar ahora” o fija la tasa a mano.",
       "noRate": "Todavía no hay tasa. Guarda esta página para obtenerla, o desactiva la actualización automática y escríbela.",
       "autoUpdate": "Actualizar automáticamente desde el BCV",
       "autoUpdateDesc": "Desactívalo para escribir la tasa tú mismo.",

@@ -1,4 +1,8 @@
+import https from 'node:https'
+import tls from 'node:tls'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { SECTIGO_DV_R36_PEM } from './bcv-ca'
+import { sendTelegramText } from '@/lib/notifications/telegram'
 import {
   buildPriceVariables,
   chooseRate,
@@ -81,9 +85,47 @@ async function fetchText(url: string): Promise<string | null> {
   }
 }
 
+/** Node's roots + the intermediate the BCV fails to send (see bcv-ca.ts). */
+const BCV_CA = [...tls.rootCertificates, SECTIGO_DV_R36_PEM]
+
+/**
+ * GET the BCV homepage with full TLS verification against BCV_CA. Uses
+ * node:https rather than fetch because fetch has no per-request CA
+ * option without an extra dependency.
+ */
+export function fetchBcvHtml(url: string = BCV_URL): Promise<string | null> {
+  return new Promise((resolve) => {
+    const req = https.get(
+      url,
+      {
+        ca: BCV_CA,
+        timeout: FETCH_TIMEOUT_MS,
+        headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 (compatible; wacrm)' },
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          console.warn(`[ai pricing] ${url} answered HTTP ${res.statusCode}`)
+          res.resume()
+          resolve(null)
+          return
+        }
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+        res.on('error', () => resolve(null))
+      },
+    )
+    req.on('timeout', () => req.destroy(new Error('timeout')))
+    req.on('error', (err: NodeJS.ErrnoException) => {
+      console.warn(`[ai pricing] could not fetch ${url}:`, err.code ?? err.message)
+      resolve(null)
+    })
+  })
+}
+
 /** Both sources in parallel; each is null when unreachable or unparsable. */
 export async function fetchRateQuotes(): Promise<(RateQuote | null)[]> {
-  const [bcvHtml, apiText] = await Promise.all([fetchText(BCV_URL), fetchText(DOLARAPI_URL)])
+  const [bcvHtml, apiText] = await Promise.all([fetchBcvHtml(), fetchText(DOLARAPI_URL)])
   let api: RateQuote | null = null
   if (apiText) {
     try {
@@ -170,6 +212,33 @@ export function mergeQuotes(
   }
 }
 
+/** At most one "BCV unreachable" alert per server instance per window. */
+const BCV_ALERT_EVERY_MS = 6 * 60 * 60 * 1000
+let lastBcvAlertAt = 0
+
+async function alertBcvUnreachable(state: PricingState, now: Date): Promise<void> {
+  if (now.getTime() - lastBcvAlertAt < BCV_ALERT_EVERY_MS) return
+  lastBcvAlertAt = now.getTime()
+  const rate = state.rate ? state.rate.toFixed(2).replace('.', ',') : '—'
+  const source = state.rateSource === 'bcv' ? 'BCV' : state.rateSource === 'dolarapi' ? 'DolarApi' : 'manual'
+  const date = state.rateDate ? state.rateDate.split('-').reverse().join('/') : '—'
+  await sendTelegramText(
+    [
+      '⚠️ No pude leer la tasa del BCV.',
+      `El bot sigue cotizando con ${rate} Bs/USD (fecha valor ${date}, fuente ${source}).`,
+      source === 'BCV'
+        ? 'Es la última tasa del BCV que alcancé a leer.'
+        : 'Esta puede ser la tasa vigente y no la última publicada.',
+      'Si el BCV ya publicó una tasa nueva, fíjala a mano en AI Agents → Prices.',
+    ].join('\n'),
+  )
+}
+
+/** Test hook: reset the alert throttle. */
+export function __resetBcvAlertThrottle(): void {
+  lastBcvAlertAt = 0
+}
+
 function isStale(state: PricingState, now: Date): boolean {
   if (!state.checkedAt) return true
   const last = Date.parse(state.checkedAt)
@@ -200,7 +269,11 @@ export async function loadPricing(
     state.autoUpdate && (refresh === 'force' || (refresh === 'if-stale' && isStale(state, now)))
   if (!shouldRefresh) return state
 
-  const merged = mergeQuotes(state, await fetchRateQuotes(), now)
+  const quotes = await fetchRateQuotes()
+  const merged = mergeQuotes(state, quotes, now)
+  // Only the BCV publishes the latest rate; DolarApi lags a day. If the
+  // BCV could not be read, the price may be too low — tell the owner.
+  if (!quotes[0]) await alertBcvUnreachable(merged, now)
   const { error: updateErr } = await db
     .from('ai_pricing')
     .update({
