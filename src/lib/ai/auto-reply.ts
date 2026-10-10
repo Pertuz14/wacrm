@@ -9,6 +9,7 @@ import { loadPromptVariables } from './exchange-rate'
 import { applyTemplateVariables } from './pricing'
 import { hasAction, parseBotOutput } from './bot-output'
 import { alertHandoff, alertPaymentToVerify } from './bot-alerts'
+import { syncDealForTurn } from './pipeline-sync'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import {
@@ -224,6 +225,10 @@ export async function dispatchInboundToAiReply(
     if (hasAction(actions, 'verify_payment')) {
       await alertPaymentToVerify(db, target, hasAction(actions, 'registro')?.fields ?? null)
     }
+
+    // Create / advance the contact's deal from this turn's stage labels
+    // (no-op unless pipeline sync is configured; never throws).
+    await syncDealForTurn(db, { ...target, configOwnerUserId, actions })
 
     if (handoff || parts.length === 0) {
       // The model can't (or shouldn't) keep answering — stop auto-replying

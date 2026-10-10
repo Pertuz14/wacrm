@@ -30,6 +30,7 @@ vi.mock('./context', () => ({ buildConversationContext: h.buildConversationConte
 vi.mock('./knowledge', () => ({ retrieveKnowledge: h.retrieveKnowledge }))
 vi.mock('./generate', () => ({ generateReply: h.generateReply }))
 vi.mock('./exchange-rate', () => ({ loadPromptVariables: h.loadPromptVariables }))
+vi.mock('./pipeline-sync', () => ({ syncDealForTurn: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('./bot-alerts', () => ({
   alertPaymentToVerify: h.alertPaymentToVerify,
   alertHandoff: h.alertHandoff,

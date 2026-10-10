@@ -2227,6 +2227,35 @@
       "errorDuplicate": "Row {row}: the variable {key} is repeated.",
       "errorUsd": "Row {row}: enter a valid USD amount.",
       "errorManualRate": "Enter the rate to use."
+    },
+    "pipelineSync": {
+      "loading": "Loading…",
+      "loadFailed": "Could not load the pipeline settings.",
+      "title": "Automatic pipeline",
+      "description": "The assistant creates each contact’s deal and moves it through your pipeline as the conversation advances.",
+      "enabled": "Move deals automatically",
+      "enabledDesc": "Uses the stage labels the assistant writes in each reply.",
+      "noPipelines": "Create a pipeline in Pipelines first.",
+      "pipeline": "Pipeline",
+      "pipelinePlaceholder": "Choose a pipeline",
+      "stageNone": "Choose a stage",
+      "stageNew": "New contact",
+      "stageNewHint": "When someone writes for the first time.",
+      "stageInterested": "Interested",
+      "stageInterestedHint": "When the area is defined or the payment details were sent.",
+      "stageVerify": "Payment to verify",
+      "stageVerifyHint": "When the receipt and the registration form arrive.",
+      "stageLost": "Lost / no reply",
+      "stageLostHint": "After the days below without a customer message. If they write again, the deal comes back.",
+      "lostAfterDays": "Days without reply",
+      "lostAfterDaysDesc": "A deal moves to “Lost” when the customer has not written for this many days.",
+      "manualNote": "Deals only move forward, and any stage you choose by hand that is not in this list (for example “Purchase completed”) is never touched by the assistant.",
+      "save": "Save",
+      "saveSuccess": "Pipeline settings saved.",
+      "saveFailed": "Could not save the pipeline settings.",
+      "errorIncomplete": "Choose a pipeline and the four stages.",
+      "errorDuplicate": "Each step needs a different stage.",
+      "errorDays": "Enter between 1 and 365 days."
     }
   },
   "Interactive": {
@@ -2694,7 +2723,9 @@
       "pricingNotSaved": "Save the prices page first.",
       "telegramNotConfigured": "Telegram is not configured: set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.",
       "telegramTestFailed": "Telegram rejected the message: {detail}",
-      "telegramTestMessage": "✅ Test alert from wacrm. Payment and handoff alerts will arrive in this chat."
+      "telegramTestMessage": "✅ Test alert from wacrm. Payment and handoff alerts will arrive in this chat.",
+      "pipelineSyncInvalid": "Choose a pipeline of this account, four different stages of it, and between 1 and 365 days.",
+      "pipelineSyncSaveFailed": "Could not save the pipeline settings."
     },
     "automations": {
       "copyName": "{name} (Copy)",

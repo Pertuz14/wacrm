@@ -64,8 +64,19 @@ async function fetchText(url: string): Promise<string | null> {
       cache: 'no-store',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
-    return res.ok ? await res.text() : null
-  } catch {
+    if (!res.ok) {
+      console.warn(`[ai pricing] ${url} answered HTTP ${res.status}`)
+      return null
+    }
+    return await res.text()
+  } catch (err) {
+    // Surfaces e.g. a TLS chain the server can't verify, a timeout or a
+    // block, so a rate stuck on the fallback source is diagnosable.
+    const cause = (err as { cause?: { code?: string; message?: string } })?.cause
+    console.warn(
+      `[ai pricing] could not fetch ${url}:`,
+      cause?.code ?? cause?.message ?? (err instanceof Error ? err.message : String(err)),
+    )
     return null
   }
 }
@@ -81,7 +92,9 @@ export async function fetchRateQuotes(): Promise<(RateQuote | null)[]> {
       api = null
     }
   }
-  return [bcvHtml ? parseBcvHomepage(bcvHtml) : null, api]
+  const bcv = bcvHtml ? parseBcvHomepage(bcvHtml) : null
+  if (bcvHtml && !bcv) console.warn('[ai pricing] BCV page fetched but the rate was not found (layout changed?)')
+  return [bcv, api]
 }
 
 export interface PricingState {

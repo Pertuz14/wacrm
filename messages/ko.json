@@ -2227,6 +2227,35 @@
       "errorDuplicate": "{row}행: 변수 {key}이(가) 중복되었습니다.",
       "errorUsd": "{row}행: 올바른 USD 금액을 입력하세요.",
       "errorManualRate": "사용할 환율을 입력하세요."
+    },
+    "pipelineSync": {
+      "loading": "불러오는 중…",
+      "loadFailed": "파이프라인 설정을 불러오지 못했습니다.",
+      "title": "자동 파이프라인",
+      "description": "어시스턴트가 각 연락처의 거래를 만들고 대화가 진행됨에 따라 파이프라인에서 이동시킵니다.",
+      "enabled": "거래 자동 이동",
+      "enabledDesc": "어시스턴트가 각 응답에 쓰는 단계 라벨을 사용합니다.",
+      "noPipelines": "먼저 파이프라인 메뉴에서 파이프라인을 만드세요.",
+      "pipeline": "파이프라인",
+      "pipelinePlaceholder": "파이프라인 선택",
+      "stageNone": "단계 선택",
+      "stageNew": "새 연락처",
+      "stageNewHint": "처음 메시지를 보냈을 때.",
+      "stageInterested": "관심 있음",
+      "stageInterestedHint": "분야가 정해졌거나 결제 정보를 보냈을 때.",
+      "stageVerify": "확인할 결제",
+      "stageVerifyHint": "영수증과 등록 양식이 도착했을 때.",
+      "stageLost": "실패 / 응답 없음",
+      "stageLostHint": "아래 일수 동안 고객 메시지가 없으면 이동합니다. 다시 연락하면 거래가 돌아옵니다.",
+      "lostAfterDays": "응답 없는 일수",
+      "lostAfterDaysDesc": "고객이 이 일수 동안 메시지를 보내지 않으면 거래가 “실패”로 이동합니다.",
+      "manualNote": "거래는 앞으로만 이동하며, 이 목록에 없는 단계(예: “구매 완료”)로 직접 옮긴 거래는 어시스턴트가 건드리지 않습니다.",
+      "save": "저장",
+      "saveSuccess": "파이프라인 설정이 저장되었습니다.",
+      "saveFailed": "파이프라인 설정을 저장하지 못했습니다.",
+      "errorIncomplete": "파이프라인과 네 개의 단계를 선택하세요.",
+      "errorDuplicate": "각 단계는 서로 다른 단계를 선택해야 합니다.",
+      "errorDays": "1~365일 사이로 입력하세요."
     }
   },
   "Interactive": {
@@ -2694,7 +2723,9 @@
       "pricingNotSaved": "먼저 가격 페이지를 저장하세요.",
       "telegramNotConfigured": "텔레그램이 설정되지 않았습니다: TELEGRAM_BOT_TOKEN과 TELEGRAM_CHAT_ID를 설정하세요.",
       "telegramTestFailed": "텔레그램이 메시지를 거부했습니다: {detail}",
-      "telegramTestMessage": "✅ wacrm 테스트 알림입니다. 결제 및 담당자 전달 알림이 이 채팅으로 옵니다."
+      "telegramTestMessage": "✅ wacrm 테스트 알림입니다. 결제 및 담당자 전달 알림이 이 채팅으로 옵니다.",
+      "pipelineSyncInvalid": "이 계정의 파이프라인, 그 파이프라인의 서로 다른 네 단계, 1~365일을 선택하세요.",
+      "pipelineSyncSaveFailed": "파이프라인 설정을 저장하지 못했습니다."
     },
     "automations": {
       "copyName": "{name} (복사본)",

@@ -2227,6 +2227,35 @@
       "errorDuplicate": "Fila {row}: la variable {key} está repetida.",
       "errorUsd": "Fila {row}: escribe un monto en USD válido.",
       "errorManualRate": "Escribe la tasa a usar."
+    },
+    "pipelineSync": {
+      "loading": "Cargando…",
+      "loadFailed": "No se pudo cargar la configuración del pipeline.",
+      "title": "Pipeline automático",
+      "description": "El asistente crea el trato de cada contacto y lo mueve por tu pipeline a medida que avanza la conversación.",
+      "enabled": "Mover tratos automáticamente",
+      "enabledDesc": "Usa las etiquetas de etapa que el asistente escribe en cada respuesta.",
+      "noPipelines": "Primero crea un pipeline en Pipelines.",
+      "pipeline": "Pipeline",
+      "pipelinePlaceholder": "Elige un pipeline",
+      "stageNone": "Elige una etapa",
+      "stageNew": "Contacto nuevo",
+      "stageNewHint": "Cuando alguien escribe por primera vez.",
+      "stageInterested": "Interesado",
+      "stageInterestedHint": "Cuando se define el área o se enviaron los datos de pago.",
+      "stageVerify": "Pago por verificar",
+      "stageVerifyHint": "Cuando llegan la captura y el registro.",
+      "stageLost": "Perdido / sin respuesta",
+      "stageLostHint": "Tras los días de abajo sin mensajes del cliente. Si vuelve a escribir, el trato regresa.",
+      "lostAfterDays": "Días sin respuesta",
+      "lostAfterDaysDesc": "Un trato pasa a “Perdido” cuando el cliente no escribe durante esta cantidad de días.",
+      "manualNote": "Los tratos solo avanzan, y cualquier etapa que elijas a mano que no esté en esta lista (por ejemplo “Compra finalizada”) el asistente nunca la toca.",
+      "save": "Guardar",
+      "saveSuccess": "Configuración del pipeline guardada.",
+      "saveFailed": "No se pudo guardar la configuración del pipeline.",
+      "errorIncomplete": "Elige un pipeline y las cuatro etapas.",
+      "errorDuplicate": "Cada paso necesita una etapa distinta.",
+      "errorDays": "Escribe entre 1 y 365 días."
     }
   },
   "Interactive": {
@@ -2694,7 +2723,9 @@
       "pricingNotSaved": "Primero guarda la página de precios.",
       "telegramNotConfigured": "Telegram no está configurado: define TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID.",
       "telegramTestFailed": "Telegram rechazó el mensaje: {detail}",
-      "telegramTestMessage": "✅ Aviso de prueba de wacrm. Los avisos de pagos y de clientes que piden una persona llegarán a este chat."
+      "telegramTestMessage": "✅ Aviso de prueba de wacrm. Los avisos de pagos y de clientes que piden una persona llegarán a este chat.",
+      "pipelineSyncInvalid": "Elige un pipeline de esta cuenta, cuatro etapas distintas de ese pipeline y entre 1 y 365 días.",
+      "pipelineSyncSaveFailed": "No se pudo guardar la configuración del pipeline."
     },
     "automations": {
       "copyName": "{name} (Copia)",

@@ -17,6 +17,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { resumeAwaitingReply, runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { sweepStaleDeals } from '@/lib/ai/pipeline-sync'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -996,6 +997,11 @@ async function processMessage(
       inboundMessageId: message.id,
     })
   }
+
+  // Move deals whose customer went silent to the "lost" stage. Piggybacks
+  // on inbound traffic instead of a cron; throttled to once an hour per
+  // account and a no-op unless pipeline sync is configured. Never throws.
+  await sweepStaleDeals(supabaseAdmin(), accountId)
 
   // message.received webhook (public API). Awaited — not fire-and-forget
   // — because we're inside the route's `after()` block, which only keeps

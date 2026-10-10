@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AiPlayground } from '@/components/agents/ai-playground';
 import { AiUsageCard } from '@/components/agents/ai-usage';
 import { AiPricing } from '@/components/agents/ai-pricing';
+import { AiPipelineSync } from '@/components/agents/ai-pipeline-sync';
 import { AiConfig } from '@/components/settings/ai-config';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
@@ -82,6 +83,11 @@ export default function AgentsPage() {
 
           <TabsContent value="setup" className="mt-4">
             <AiConfig />
+            {canViewUsage && (
+              <div className="mt-6">
+                <AiPipelineSync />
+              </div>
+            )}
           </TabsContent>
 
           {canViewUsage && (

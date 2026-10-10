@@ -2227,6 +2227,35 @@
       "errorDuplicate": "Linha {row}: a variável {key} está repetida.",
       "errorUsd": "Linha {row}: informe um valor em USD válido.",
       "errorManualRate": "Informe a taxa a usar."
+    },
+    "pipelineSync": {
+      "loading": "Carregando…",
+      "loadFailed": "Não foi possível carregar as configurações do pipeline.",
+      "title": "Pipeline automático",
+      "description": "O assistente cria o negócio de cada contato e o move pelo seu pipeline conforme a conversa avança.",
+      "enabled": "Mover negócios automaticamente",
+      "enabledDesc": "Usa as etiquetas de etapa que o assistente escreve em cada resposta.",
+      "noPipelines": "Crie primeiro um pipeline em Pipelines.",
+      "pipeline": "Pipeline",
+      "pipelinePlaceholder": "Escolha um pipeline",
+      "stageNone": "Escolha uma etapa",
+      "stageNew": "Contato novo",
+      "stageNewHint": "Quando alguém escreve pela primeira vez.",
+      "stageInterested": "Interessado",
+      "stageInterestedHint": "Quando a área é definida ou os dados de pagamento foram enviados.",
+      "stageVerify": "Pagamento a verificar",
+      "stageVerifyHint": "Quando chegam o comprovante e o cadastro.",
+      "stageLost": "Perdido / sem resposta",
+      "stageLostHint": "Após os dias abaixo sem mensagens do cliente. Se ele voltar a escrever, o negócio volta.",
+      "lostAfterDays": "Dias sem resposta",
+      "lostAfterDaysDesc": "Um negócio vai para “Perdido” quando o cliente não escreve por esta quantidade de dias.",
+      "manualNote": "Os negócios só avançam, e qualquer etapa escolhida manualmente que não esteja nesta lista (por exemplo “Compra finalizada”) nunca é alterada pelo assistente.",
+      "save": "Salvar",
+      "saveSuccess": "Configurações do pipeline salvas.",
+      "saveFailed": "Não foi possível salvar as configurações do pipeline.",
+      "errorIncomplete": "Escolha um pipeline e as quatro etapas.",
+      "errorDuplicate": "Cada passo precisa de uma etapa diferente.",
+      "errorDays": "Informe entre 1 e 365 dias."
     }
   },
   "Interactive": {
@@ -2694,7 +2723,9 @@
       "pricingNotSaved": "Salve primeiro a página de preços.",
       "telegramNotConfigured": "O Telegram não está configurado: defina TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID.",
       "telegramTestFailed": "O Telegram recusou a mensagem: {detail}",
-      "telegramTestMessage": "✅ Alerta de teste do wacrm. Os alertas de pagamentos e de clientes que pedem uma pessoa chegarão neste chat."
+      "telegramTestMessage": "✅ Alerta de teste do wacrm. Os alertas de pagamentos e de clientes que pedem uma pessoa chegarão neste chat.",
+      "pipelineSyncInvalid": "Escolha um pipeline desta conta, quatro etapas diferentes dele e entre 1 e 365 dias.",
+      "pipelineSyncSaveFailed": "Não foi possível salvar as configurações do pipeline."
     },
     "automations": {
       "copyName": "{name} (Cópia)",
