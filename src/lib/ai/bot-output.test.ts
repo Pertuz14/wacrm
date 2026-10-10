@@ -89,3 +89,28 @@ describe('parseBotOutput', () => {
     expect(out.messages[MAX_MESSAGES_PER_TURN - 1]).toContain(`m${MAX_MESSAGES_PER_TURN + 1}`)
   })
 })
+
+describe('parseBotOutput — leaked working notes', () => {
+  it('drops a line where the model narrates which template it is using', () => {
+    const raw = [
+      'M05 applies: image after payment data plus full REGISTRO. Send M05 and tags.',
+      '',
+      '¡Gracias! 🙌 Recibimos su captura y sus datos.',
+      '[[ACCION:VERIFICAR_PAGO]]',
+    ].join('\n')
+    expect(parseBotOutput(raw)).toEqual({
+      messages: ['¡Gracias! 🙌 Recibimos su captura y sus datos.'],
+      actions: [{ type: 'verify_payment' }],
+    })
+  })
+
+  it('also catches suffixed ids and ids in parentheses', () => {
+    expect(parseBotOutput('(Envío M04A)\nHola').messages).toEqual(['Hola'])
+  })
+
+  it('keeps normal text that merely contains an M and digits', () => {
+    expect(parseBotOutput('Mide 150 minutos. Código M5 no aplica.').messages).toEqual([
+      'Mide 150 minutos. Código M5 no aplica.',
+    ])
+  })
+})

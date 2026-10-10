@@ -16,6 +16,15 @@
 
 export { MESSAGE_SEPARATOR } from './defaults'
 
+/**
+ * A line that leaks the model's working notes rather than talking to the
+ * customer: it names an internal template id ("M05 applies: …", "Send
+ * M04A and tags", "(M12)"). Prompts refer to canned messages as M01–M99
+ * (optionally with a letter suffix); a real customer message never
+ * contains such an id, so the line is dropped.
+ */
+const INTERNAL_NOTE = /\bM\d{2}[A-Z]?\b/
+
 /** WhatsApp shows each part as its own bubble; more than this is spam. */
 export const MAX_MESSAGES_PER_TURN = 5
 
@@ -107,6 +116,8 @@ export function parseBotOutput(raw: string): BotOutput {
     }
     // A line that held only tags leaves no blank line behind.
     if (sawTag && !text.trim()) continue
+    // Never forward the model's reasoning about which template to use.
+    if (INTERNAL_NOTE.test(text)) continue
     current.push(sawTag ? text.trimEnd() : text)
   }
   flush()
