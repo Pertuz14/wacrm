@@ -160,6 +160,37 @@ export function secondPaymentDeadline(now: Date = new Date()): string {
   }).format(deadline)
 }
 
+/** How many upcoming first-payment days the cutoff table covers. */
+export const CUTOFF_TABLE_DAYS = 30
+
+const LONG_DATE_UTC = new Intl.DateTimeFormat('es-VE', {
+  timeZone: 'UTC',
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+/**
+ * One line per possible first-payment day, from today (Caracas) for the
+ * next CUTOFF_TABLE_DAYS days, with its second-payment deadline:
+ * `• Si el primer pago es el martes, 20 de octubre de 2026 → fecha de
+ * corte: martes, 3 de noviembre de 2026`. Lets the assistant answer
+ * "and if I pay on the 20th?" by copying, never by counting days.
+ */
+export function cutoffDateTable(now: Date = new Date()): string {
+  const [y, m, d] = todayInCaracas(now).split('-').map(Number)
+  const lines: string[] = []
+  for (let i = 0; i <= CUTOFF_TABLE_DAYS; i++) {
+    const pay = new Date(Date.UTC(y, m - 1, d + i, 12))
+    const cutoff = new Date(Date.UTC(y, m - 1, d + i + SECOND_PAYMENT_DAYS, 12))
+    lines.push(
+      `• Si el primer pago es el ${LONG_DATE_UTC.format(pay)} → fecha de corte: ${LONG_DATE_UTC.format(cutoff)}`,
+    )
+  }
+  return lines.join('\n')
+}
+
 /** `13/10/2026` for an ISO date, without time-zone drift. */
 export function shortDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-')
@@ -199,6 +230,7 @@ export function buildPriceVariables(args: {
   const vars: Record<string, string> = {
     FECHA_HOY: longSpanishDate(now),
     FECHA_CORTE_2P: secondPaymentDeadline(now),
+    TABLA_FECHAS_CORTE: cutoffDateTable(now),
   }
   if (rate) {
     vars.TASA_BCV = formatBs(rate)

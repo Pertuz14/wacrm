@@ -163,3 +163,22 @@ describe('secondPaymentDeadline', () => {
     expect(vars.FECHA_CORTE_2P).toBe('sábado, 24 de octubre de 2026')
   })
 })
+
+describe('cutoffDateTable', () => {
+  it('lists today and the next 30 days with their cutoff, 14 calendar days later', async () => {
+    const { cutoffDateTable, buildPriceVariables } = await import('./pricing')
+    const now = new Date('2026-10-10T15:00:00Z')
+    const lines = cutoffDateTable(now).split('\n')
+    expect(lines).toHaveLength(31)
+    expect(lines[0]).toBe(
+      '• Si el primer pago es el sábado, 10 de octubre de 2026 → fecha de corte: sábado, 24 de octubre de 2026',
+    )
+    // The case from the Playground: first payment on Tuesday the 20th.
+    expect(lines).toContain(
+      '• Si el primer pago es el martes, 20 de octubre de 2026 → fecha de corte: martes, 3 de noviembre de 2026',
+    )
+    expect(buildPriceVariables({ rate: null, rateDate: null, items: [], now }).TABLA_FECHAS_CORTE).toBe(
+      lines.join('\n'),
+    )
+  })
+})
