@@ -80,13 +80,38 @@ export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
     : `${normalized}/chat/completions`
 }
 
+/**
+ * Output budget for OpenAI-compatible APIs. Higher than the shared
+ * MAX_OUTPUT_TOKENS because many models behind these APIs (OpenRouter's
+ * reasoning models, DeepSeek R1, Gemini 2.5…) spend part of `max_tokens`
+ * thinking before they write: with 1024 the thinking can use it all and
+ * the reply comes back empty (finish_reason "length"). Replies stay
+ * short — the prompt asks for WhatsApp-sized messages — so this only
+ * raises the ceiling, not the typical spend.
+ */
+export const COMPAT_MAX_OUTPUT_TOKENS = Math.max(MAX_OUTPUT_TOKENS, 4096)
+
+type ContentPart = { type?: string; text?: string }
+
 interface OpenAiCompatibleResponse {
-  choices?: { message?: { content?: string } }[]
+  choices?: {
+    message?: { content?: string | ContentPart[] | null }
+    finish_reason?: string | null
+  }[]
   usage?: {
     prompt_tokens?: number
     completion_tokens?: number
     total_tokens?: number
   }
+}
+
+/** `content` is usually a string, but some providers return text parts. */
+export function extractContentText(content: string | ContentPart[] | null | undefined): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .map((part) => (part && typeof part.text === 'string' ? part.text : ''))
+    .join('')
 }
 
 export async function generateOpenAiCompatible(
@@ -123,7 +148,7 @@ export async function generateOpenAiCompatible(
       body: JSON.stringify({
         model,
         messages: [{ role: 'system', content: systemPrompt }, ...mergeConsecutive(messages)],
-        max_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: COMPAT_MAX_OUTPUT_TOKENS,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
@@ -134,11 +159,17 @@ export async function generateOpenAiCompatible(
   if (!res.ok) throw await providerHttpError('OpenAI-compatible provider', res)
 
   const data = (await res.json().catch(() => null)) as OpenAiCompatibleResponse | null
-  const text = data?.choices?.[0]?.message?.content
-  if (!text || typeof text !== 'string' || !text.trim()) {
-    throw new AiError(t('ai.emptyResponse', { provider: 'OpenAI-compatible provider' }), {
-      code: 'empty_response',
-    })
+  const choice = data?.choices?.[0]
+  const text = extractContentText(choice?.message?.content)
+  if (!text.trim()) {
+    // Name the finish reason ("length" = the budget ran out, usually on
+    // reasoning; "content_filter" = blocked) so the failure is diagnosable.
+    const reason = choice?.finish_reason ? ` (finish_reason: ${choice.finish_reason})` : ''
+    console.warn(`[ai] OpenAI-compatible empty response from model "${model}"${reason}`)
+    throw new AiError(
+      t('ai.emptyResponse', { provider: `OpenAI-compatible provider${reason}` }),
+      { code: 'empty_response' },
+    )
   }
 
   return {

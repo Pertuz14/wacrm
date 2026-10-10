@@ -155,3 +155,30 @@ describe('generateOpenAiCompatible', () => {
     expect(fetchMock.mock.calls[0][1].redirect).toBe('manual')
   })
 })
+
+describe('extractContentText', () => {
+  it('accepts a plain string', async () => {
+    const { extractContentText } = await import('./openai-compatible')
+    expect(extractContentText('hola')).toBe('hola')
+  })
+
+  it('joins text parts and ignores non-text ones', async () => {
+    const { extractContentText } = await import('./openai-compatible')
+    expect(
+      extractContentText([{ type: 'text', text: 'Ho' }, { type: 'image' }, { type: 'text', text: 'la' }]),
+    ).toBe('Hola')
+  })
+
+  it('treats null / missing content as empty', async () => {
+    const { extractContentText } = await import('./openai-compatible')
+    expect(extractContentText(null)).toBe('')
+    expect(extractContentText(undefined)).toBe('')
+  })
+})
+
+describe('COMPAT_MAX_OUTPUT_TOKENS', () => {
+  it('leaves room for reasoning models to think and still answer', async () => {
+    const { COMPAT_MAX_OUTPUT_TOKENS } = await import('./openai-compatible')
+    expect(COMPAT_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(4096)
+  })
+})
