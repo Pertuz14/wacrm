@@ -234,6 +234,7 @@ export function AiPricing() {
     { name: 'TASA_BCV', hint: t('builtinRate') },
     { name: 'FECHA_HOY', hint: t('builtinToday') },
     { name: 'FECHA_TASA', hint: t('builtinRateDate') },
+    { name: 'FECHA_CORTE_2P', hint: t('builtinCutoff') },
   ];
   const suffixHint: Record<(typeof ITEM_VARIABLE_SUFFIXES)[number], string> = {
     _BS: t('varBs'),

@@ -2210,6 +2210,7 @@
       "builtinRate": "BCV 환율",
       "builtinToday": "오늘 날짜",
       "builtinRateDate": "환율 날짜",
+      "builtinCutoff": "오늘 1차 결제 시 2차 결제 마감일(연속 14일)",
       "varBs": "Bs 금액",
       "varUsd": "USD 금액",
       "varBsCopy": "은행 앱에 붙여넣을 Bs 금액(천 단위 구분 기호 없음)",

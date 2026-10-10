@@ -135,6 +135,31 @@ export function longSpanishDate(now: Date = new Date()): string {
   }).format(now)
 }
 
+/**
+ * Days the customer has for the second payment of a two-part plan.
+ * Calendar ("continuous") days: weekends and holidays count.
+ */
+export const SECOND_PAYMENT_DAYS = 14
+
+/**
+ * Deadline for the second payment when the first one is made today
+ * (Caracas): today + SECOND_PAYMENT_DAYS calendar days, as
+ * `sábado, 24 de octubre de 2026`. Pre-computed because the model must
+ * not count days itself.
+ */
+export function secondPaymentDeadline(now: Date = new Date()): string {
+  const [y, m, d] = todayInCaracas(now).split('-').map(Number)
+  // Pure calendar arithmetic in UTC, then formatted in UTC: no drift.
+  const deadline = new Date(Date.UTC(y, m - 1, d + SECOND_PAYMENT_DAYS, 12))
+  return new Intl.DateTimeFormat('es-VE', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(deadline)
+}
+
 /** `13/10/2026` for an ISO date, without time-zone drift. */
 export function shortDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-')
@@ -173,6 +198,7 @@ export function buildPriceVariables(args: {
   const { rate, rateDate, items, now = new Date() } = args
   const vars: Record<string, string> = {
     FECHA_HOY: longSpanishDate(now),
+    FECHA_CORTE_2P: secondPaymentDeadline(now),
   }
   if (rate) {
     vars.TASA_BCV = formatBs(rate)

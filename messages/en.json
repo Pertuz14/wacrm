@@ -2210,6 +2210,7 @@
       "builtinRate": "BCV rate",
       "builtinToday": "today’s date",
       "builtinRateDate": "date of the rate",
+      "builtinCutoff": "deadline for the 2nd payment if the 1st is paid today (14 calendar days)",
       "varBs": "amount in Bs",
       "varUsd": "amount in USD",
       "varBsCopy": "amount in Bs to paste into a bank app (no thousands separator)",

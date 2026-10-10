@@ -2210,6 +2210,7 @@
       "builtinRate": "taxa do BCV",
       "builtinToday": "data de hoje",
       "builtinRateDate": "data da taxa",
+      "builtinCutoff": "prazo do 2º pagamento se o 1º for pago hoje (14 dias corridos)",
       "varBs": "valor em Bs",
       "varUsd": "valor em USD",
       "varBsCopy": "valor em Bs para colar no app do banco (sem separador de milhar)",

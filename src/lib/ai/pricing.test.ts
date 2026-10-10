@@ -139,3 +139,27 @@ describe('buildPriceVariables + applyTemplateVariables', () => {
     expect(out).toBe('Paquete: 50 USD = 43.782,53 Bs · {{NO_EXISTE}} · {{p_minuscula}}')
   })
 })
+
+describe('secondPaymentDeadline', () => {
+  it('adds 14 calendar days to today in Caracas', async () => {
+    const { secondPaymentDeadline } = await import('./pricing')
+    expect(secondPaymentDeadline(new Date('2026-10-10T15:00:00Z'))).toBe('sábado, 24 de octubre de 2026')
+  })
+
+  it('crosses month and year boundaries', async () => {
+    const { secondPaymentDeadline } = await import('./pricing')
+    expect(secondPaymentDeadline(new Date('2026-12-25T15:00:00Z'))).toBe('viernes, 8 de enero de 2027')
+  })
+
+  it('uses the Caracas date, not UTC, near midnight', async () => {
+    const { secondPaymentDeadline } = await import('./pricing')
+    // 02:00 UTC on the 11th is still the 10th in Caracas.
+    expect(secondPaymentDeadline(new Date('2026-10-11T02:00:00Z'))).toBe('sábado, 24 de octubre de 2026')
+  })
+
+  it('is exposed as {{FECHA_CORTE_2P}}', async () => {
+    const { buildPriceVariables } = await import('./pricing')
+    const vars = buildPriceVariables({ rate: null, rateDate: null, items: [], now: new Date('2026-10-10T15:00:00Z') })
+    expect(vars.FECHA_CORTE_2P).toBe('sábado, 24 de octubre de 2026')
+  })
+})
