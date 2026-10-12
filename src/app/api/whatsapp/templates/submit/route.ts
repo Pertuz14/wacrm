@@ -7,7 +7,7 @@ import {
   toErrorResponse,
 } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { submitMessageTemplate } from '@/lib/whatsapp/meta-api'
+import { MetaApiError, submitMessageTemplate } from '@/lib/whatsapp/meta-api'
 import {
   validateTemplatePayload,
   type TemplatePayload,
@@ -191,7 +191,10 @@ export async function POST(request: Request) {
         metaTemplateId = meta.id
         metaStatus = meta.status
       } catch (e) {
-        const message = e instanceof Error ? e.message : t('templates.metaSubmitFailed')
+        // Meta's bare "Invalid parameter" doesn't say what's wrong; fullMessage adds its explanation
+        const message = e instanceof MetaApiError
+          ? e.fullMessage
+          : e instanceof Error ? e.message : t('templates.metaSubmitFailed')
         // Persist the failure so the user can retry; row stays DRAFT
         // until they fix and re-submit.
         await upsertTemplateRow(

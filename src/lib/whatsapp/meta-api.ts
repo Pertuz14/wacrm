@@ -35,6 +35,9 @@ interface MetaErrorResponse {
     error_subcode?: number
     type?: string
     fbtrace_id?: string
+    /** Human-readable explanation Meta adds to generic errors like "Invalid parameter". */
+    error_user_title?: string
+    error_user_msg?: string
     /** WhatsApp-specific envelope — `details` is the human-readable part. */
     error_data?: { messaging_product?: string; details?: string }
   }
@@ -58,6 +61,9 @@ export class MetaApiError extends Error {
   readonly httpStatus: number
   /** `error.error_data.details` — WhatsApp endpoints put the useful text here. */
   readonly details: string | null
+  /** `error.error_user_title` / `error_user_msg` — e.g. which template field Meta rejected and why. */
+  readonly userTitle: string | null
+  readonly userMsg: string | null
 
   constructor(
     message: string,
@@ -68,6 +74,8 @@ export class MetaApiError extends Error {
       fbtraceId?: string | null
       httpStatus: number
       details?: string | null
+      userTitle?: string | null
+      userMsg?: string | null
     },
   ) {
     super(message)
@@ -78,6 +86,18 @@ export class MetaApiError extends Error {
     this.fbtraceId = fields.fbtraceId ?? null
     this.httpStatus = fields.httpStatus
     this.details = fields.details ?? null
+    this.userTitle = fields.userTitle ?? null
+    this.userMsg = fields.userMsg ?? null
+  }
+
+  /** Meta's message plus its human explanation, when it gave one. */
+  get fullMessage(): string {
+    const explanation = [this.userTitle, this.userMsg ?? this.details]
+      .filter((part): part is string => Boolean(part?.trim()))
+      .join(' — ')
+    return explanation && !this.message.includes(explanation)
+      ? `${this.message}: ${explanation}`
+      : this.message
   }
 }
 
@@ -102,6 +122,8 @@ async function readMetaError(response: Response, fallback: string): Promise<Meta
     fbtraceId: envelope?.fbtrace_id ?? null,
     httpStatus: response.status,
     details: envelope?.error_data?.details ?? null,
+    userTitle: envelope?.error_user_title ?? null,
+    userMsg: envelope?.error_user_msg ?? null,
   })
 }
 
