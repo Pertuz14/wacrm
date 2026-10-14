@@ -117,18 +117,27 @@ export async function dispatchInboundToAiReply(
       return
     }
 
-    // Every gate has passed — we're committed to attempting a reply, so
-    // show the customer "typing…" (and mark their message read) while the
-    // retrieval + LLM round trips run. Meta clears the indicator after
-    // 25 s or when our reply lands, whichever is first, so there's
-    // nothing to undo on the handoff / no-text path. Strictly
-    // best-effort: a failed indicator must never cost us the reply.
     if (inboundMessageId) {
-      await showTypingIndicator(db, accountId, inboundMessageId)
-      // Customers often send several messages in a row (the receipt, then
-      // the registration form). Answer once, with all of them in view: if
-      // a newer message arrives during the pause, its own dispatch replies.
+      // Customers often send several messages in a row ("hola", then the
+      // question; the receipt, then the registration form). Answer once,
+      // with all of them in view: if a newer message arrives during the
+      // pause, its own dispatch replies.
       if (!(await isLatestCustomerMessage(db, conversationId, inboundMessageId))) return
+
+      // The pause is long enough for an agent to take the thread over (or
+      // for a handoff to land) — re-check before answering.
+      const { data: fresh } = await db
+        .from('conversations')
+        .select('assigned_agent_id, ai_autoreply_disabled')
+        .eq('id', conversationId)
+        .maybeSingle()
+      if (fresh?.assigned_agent_id || fresh?.ai_autoreply_disabled) return
+
+      // Committed to replying: show "typing…" (and mark the message read)
+      // while the retrieval + LLM round trips run. Shown AFTER the pause
+      // because Meta clears it after 25 s. Strictly best-effort: a failed
+      // indicator must never cost us the reply.
+      await showTypingIndicator(db, accountId, inboundMessageId)
     }
 
     // The pause above may have let more messages in — read the thread now.

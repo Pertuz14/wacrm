@@ -22,6 +22,9 @@ const h = vi.hoisted(() => ({
     /** Debounce lookups: the inbound's own row, then newer messages. */
     ownMessage: [{ created_at: '2026-10-10T12:00:00Z' }] as { created_at: string }[],
     newerMessages: [] as { id: string }[],
+    /** Conversation as re-read after the pause (null = unchanged). */
+    convAfterPause: null as Record<string, unknown> | null,
+    convReads: 0,
   },
 }))
 
@@ -76,12 +79,19 @@ vi.mock('./admin-client', () => ({
         }
         return chain
       }
-      // conversations
+      // conversations — the first read is the eligibility gate, later
+      // reads are the re-check after the pause.
       return {
         select: () => ({
           eq: () => ({
-            maybeSingle: () =>
-              Promise.resolve({ data: h.state.conv, error: null }),
+            maybeSingle: () => {
+              h.state.convReads += 1
+              const data =
+                h.state.convReads > 1 && h.state.convAfterPause
+                  ? h.state.convAfterPause
+                  : h.state.conv
+              return Promise.resolve({ data, error: null })
+            },
           }),
         }),
         update: (payload: Record<string, unknown>) => {
@@ -128,6 +138,8 @@ beforeEach(() => {
   process.env.AI_REPLY_DEBOUNCE_MS = '0'
   h.state.ownMessage = [{ created_at: '2026-10-10T12:00:00Z' }]
   h.state.newerMessages = []
+  h.state.convAfterPause = null
+  h.state.convReads = 0
   h.loadPromptVariables.mockResolvedValue({})
   h.alertPaymentToVerify.mockReset()
   h.alertHandoff.mockReset()
@@ -412,6 +424,29 @@ describe('dispatchInboundToAiReply — multi-message replies and actions', () =>
     h.state.newerMessages = [{ id: 'msg-newer' }]
     await dispatchInboundToAiReply(ARGS)
     expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('does not show "typing…" when a newer message superseded this one', async () => {
+    process.env.AI_REPLY_DEBOUNCE_MS = '1'
+    h.state.newerMessages = [{ id: 'msg-newer' }]
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.sendTypingIndicator).not.toHaveBeenCalled()
+  })
+
+  it('stands down when an agent took the thread over during the pause', async () => {
+    process.env.AI_REPLY_DEBOUNCE_MS = '1'
+    h.state.convAfterPause = { ...h.state.conv, assigned_agent_id: 'agent-1' }
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.generateReply).not.toHaveBeenCalled()
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    expect(h.sendTypingIndicator).not.toHaveBeenCalled()
+  })
+
+  it('stands down when the bot was paused for this thread during the pause', async () => {
+    process.env.AI_REPLY_DEBOUNCE_MS = '1'
+    h.state.convAfterPause = { ...h.state.conv, ai_autoreply_disabled: true }
+    await dispatchInboundToAiReply(ARGS)
     expect(h.engineSendText).not.toHaveBeenCalled()
   })
 

@@ -47,13 +47,17 @@ export function aiRequestTimeoutMs(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_REQUEST_TIMEOUT_MS
 }
 
-const DEFAULT_REPLY_DEBOUNCE_MS = 4_000
-const MAX_REPLY_DEBOUNCE_MS = 20_000
+// Customers often write "hola", then the real question a minute later.
+// Waiting 90 s answers both at once instead of replying to the greeting
+// and missing the question. Capped at 5 min so a reply never waits longer.
+const DEFAULT_REPLY_DEBOUNCE_MS = 90_000
+const MAX_REPLY_DEBOUNCE_MS = 300_000
 
 /**
- * How long the auto-reply waits for the customer to stop typing before
- * answering (so a receipt + form sent back to back get one reply). 0
- * disables the wait. Override with `AI_REPLY_DEBOUNCE_MS`.
+ * How long the auto-reply waits for the customer to stop writing before
+ * answering (so "hola" + the actual question, or a receipt + the
+ * registration form, get a single reply). Each new message restarts the
+ * wait. 0 disables it. Override with `AI_REPLY_DEBOUNCE_MS`.
  */
 export function aiReplyDebounceMs(): number {
   const raw = process.env.AI_REPLY_DEBOUNCE_MS
