@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ChatMessage } from './types'
 import { aiContextMessageLimit } from './defaults'
+import {
+  isUnsupportedInboundText,
+  unsupportedInboundForModel,
+} from '@/lib/whatsapp/unsupported-message'
 
 interface DbMessage {
   sender_type: 'customer' | 'agent' | 'bot'
@@ -32,6 +36,11 @@ export const CUSTOMER_IMAGE_PLACEHOLDER = '[The customer sent an image]'
 /** Text the model sees for one stored message; null to skip it. */
 export function renderMessageForModel(m: DbMessage): string | null {
   const text = m.content_text?.trim() ?? ''
+  // A message WhatsApp wouldn't hand us (often the first one from an ad):
+  // explain it instead of passing the raw placeholder.
+  if (m.sender_type === 'customer' && isUnsupportedInboundText(text)) {
+    return unsupportedInboundForModel(text)
+  }
   if (m.content_type === 'text') return text || null
   const label = MEDIA_LABEL[m.content_type]
   if (!label) return null

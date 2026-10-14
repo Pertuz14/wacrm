@@ -52,6 +52,17 @@ describe('buildConversationContext', () => {
     expect(out).toEqual([{ role: 'user', content: 'real' }])
   })
 
+  it('explains messages WhatsApp could not deliver instead of the raw placeholder', async () => {
+    const out = await buildConversationContext(
+      fakeDb([{ sender_type: 'customer', content_type: 'text', content_text: '[Unsupported message type: unsupported]' }]),
+      'conv-1',
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0].role).toBe('user')
+    expect(out[0].content).toContain('does not let us read')
+    expect(out[0].content).toContain('Never hand off')
+  })
+
   it('shows media as placeholders so the model knows a receipt arrived', async () => {
     const out = await buildConversationContext(
       fakeDb([
