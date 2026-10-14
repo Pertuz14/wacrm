@@ -17,6 +17,9 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { resumeAwaitingReply, runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { type MetaReferral, unsupportedInboundText } from '@/lib/whatsapp/unsupported-message'
+import { notifyInboundMessage } from '@/lib/notifications/web-push'
+import { pickContactDisplayName } from '@/lib/notifications/browser-notify'
 import { sweepStaleDeals } from '@/lib/ai/pipeline-sync'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
@@ -89,6 +92,8 @@ interface WhatsAppMessage {
   button?: { text?: string; payload?: string }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
+  /** Set on messages that come from a Click-to-WhatsApp ad or post. */
+  referral?: MetaReferral
 }
 
 /** One entry of a failed status's `errors` array, as Meta sends it. */
@@ -853,6 +858,19 @@ async function processMessage(
   // SQL — see the helper for why that matters.
   await reopenClosedConversation(supabaseAdmin(), conversation)
 
+  // Push the alert to the team's PCs, phones and tablets right away —
+  // before flows, automations and the AI reply (which waits for the
+  // customer to finish writing). No-op unless Web Push is configured;
+  // never throws.
+  await notifyInboundMessage(supabaseAdmin(), {
+    accountId,
+    conversationId: conversation.id,
+    messageId: message.id,
+    contactName: pickContactDisplayName(contactRecord),
+    contentType,
+    contentText,
+  })
+
   // If this contact was a recent broadcast recipient, flag the reply
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
@@ -1216,6 +1234,12 @@ async function parseMessageContent(
         interactiveReplyId: payload || label,
       }
     }
+
+    case 'unsupported':
+      // WhatsApp knows a message arrived but won't give us its content —
+      // very often the first message sent from an ad. Readable for the
+      // inbox, and explained to the AI by renderMessageForModel.
+      return { ...empty, contentText: unsupportedInboundText(message.referral) }
 
     default:
       return {

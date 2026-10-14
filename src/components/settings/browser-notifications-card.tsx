@@ -16,6 +16,15 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useBrowserNotifyPref } from '@/hooks/use-browser-notifications';
 import {
+  disablePush,
+  enablePush,
+  isPushActive,
+  isPushSupported,
+  needsHomeScreenInstall,
+  showTestThroughWorker,
+  type PushResult,
+} from '@/lib/notifications/push-client';
+import {
   BROWSER_NOTIFY_CHANGE_EVENT,
   getNotificationPermission,
   writeBrowserNotifyPref,
@@ -54,6 +63,24 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
     serverPermission,
   );
   const [requesting, setRequesting] = useState(false);
+  const [pushState, setPushState] = useState<PushResult | null>(null);
+  const iosNeedsInstall = useSyncExternalStore(
+    () => () => {},
+    needsHomeScreenInstall,
+    () => false,
+  );
+
+  // Turns on push for this device and reports the outcome.
+  const turnOnPush = async () => {
+    if (!isPushSupported()) {
+      setPushState('unsupported');
+      return;
+    }
+    const result = await enablePush();
+    setPushState(result);
+    if (result === 'not-configured') toast.message(t('pushNotConfigured'));
+    else if (result === 'error') toast.error(t('pushError'));
+  };
 
   const supported = permission !== 'unsupported';
   const checked = enabled && permission === 'granted';
@@ -61,10 +88,13 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
   const onToggle = async (next: boolean) => {
     if (!next) {
       writeBrowserNotifyPref(false);
+      await disablePush();
+      setPushState(null);
       return;
     }
     if (permission === 'granted') {
       writeBrowserNotifyPref(true);
+      await turnOnPush();
       return;
     }
     if (permission === 'denied') {
@@ -76,6 +106,7 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
       const result = await Notification.requestPermission();
       // Also dispatches the change event, which refreshes `permission`.
       writeBrowserNotifyPref(result === 'granted');
+      if (result === 'granted') await turnOnPush();
       if (result === 'denied') {
         toast.error(t('permissionDeniedToast'), { description: t('deniedHint') });
       }
@@ -84,7 +115,10 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
     }
   };
 
-  const sendTest = () => {
+  const sendTest = async () => {
+    // Through the service worker when available — Android can't show a
+    // notification any other way.
+    if (await showTestThroughWorker(t('testTitle'), t('testBody'))) return;
     try {
       new Notification(t('testTitle'), {
         body: t('testBody'),
@@ -113,6 +147,12 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
         <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {iosNeedsInstall && (
+          <p className="flex items-start gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
+            <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+            <span>{t('iosInstallHint')}</span>
+          </p>
+        )}
         {!supported ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <CircleAlert className="size-4 shrink-0" />
@@ -141,6 +181,19 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
             </div>
 
             <p className="text-xs text-muted-foreground">{t(statusKey)}</p>
+            {checked && (
+              <p className="text-xs text-muted-foreground">
+                {pushState === 'ok' || (pushState === null && isPushActive())
+                  ? t('pushActive')
+                  : pushState === 'not-configured'
+                    ? t('pushNotConfigured')
+                    : pushState === 'unsupported'
+                      ? t('pushUnsupported')
+                      : pushState === 'error'
+                        ? t('pushError')
+                        : t('pushTabOnly')}
+              </p>
+            )}
 
             {permission === 'denied' && (
               <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
@@ -153,7 +206,7 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
               type="button"
               variant="outline"
               size="sm"
-              onClick={sendTest}
+              onClick={() => void sendTest()}
               disabled={!checked}
             >
               <BellRing className="size-4" />

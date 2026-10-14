@@ -1860,9 +1860,9 @@
     },
     "browserNotifications": {
       "title": "Notificações do navegador",
-      "description": "Receba um alerta na área de trabalho para cada nova mensagem de cliente, mesmo quando estiver em outra página. Salvo neste dispositivo.",
+      "description": "Receba um aviso para cada nova mensagem de cliente neste dispositivo (PC, celular ou tablet), mesmo com o app fechado. Ative em cada dispositivo onde quiser recebê-los.",
       "toggleLabel": "Avisar sobre novas mensagens de clientes",
-      "toggleDesc": "Funciona apenas enquanto o app estiver aberto em uma aba do navegador.",
+      "toggleDesc": "Chegam mesmo com o app fechado, se o seu navegador permitir.",
       "statusGranted": "Permitido pelo seu navegador.",
       "statusDefault": "Ao ativar, seu navegador pedirá permissão.",
       "statusDenied": "Bloqueado nas configurações do navegador",
@@ -1880,7 +1880,13 @@
         "document": "📄 Documento",
         "location": "📍 Localização",
         "template": "📋 Modelo"
-      }
+      },
+      "pushActive": "✅ Ativado neste dispositivo: os avisos chegam mesmo com o app fechado.",
+      "pushTabOnly": "Por enquanto só chegam com o app aberto em uma aba.",
+      "pushNotConfigured": "O servidor ainda não tem as notificações push ativadas (faltam as chaves VAPID). Por enquanto só chegam com o app aberto.",
+      "pushUnsupported": "Este navegador não mostra notificações com o app fechado; só chegarão com o app aberto.",
+      "pushError": "Não foi possível ativar os avisos com o app fechado neste dispositivo. Tente novamente.",
+      "iosInstallHint": "No iPhone ou iPad: abra esta página no Safari, toque em Compartilhar → \"Adicionar à Tela de Início\", abra o app por esse ícone e ative as notificações aqui."
     },
     "apiKeys": {
       "title": "Chaves de API",

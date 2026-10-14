@@ -39,6 +39,14 @@ const metadata: Metadata = {
   },
   icons: {
     icon: [{ url: "/icon" }],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  // Installed on the home screen it opens like an app — required on
+  // iPhone/iPad to receive push notifications.
+  appleWebApp: {
+    capable: true,
+    title: "CRM",
+    statusBarStyle: "default",
   },
   formatDetection: {
     email: false,

@@ -1880,7 +1880,13 @@
         "document": "📄 문서",
         "location": "📍 위치",
         "template": "📋 템플릿"
-      }
+      },
+      "pushActive": "✅ On for this device: alerts arrive even when the app is closed.",
+      "pushTabOnly": "For now they only arrive while the app is open in a tab.",
+      "pushNotConfigured": "The server doesn't have push notifications set up yet (VAPID keys missing). For now they only arrive while the app is open.",
+      "pushUnsupported": "This browser can't show notifications while the app is closed; they'll only arrive while it's open.",
+      "pushError": "Couldn't turn on closed-app alerts on this device. Please try again.",
+      "iosInstallHint": "On iPhone or iPad: open this page in Safari, tap Share → \"Add to Home Screen\", open the app from that icon and turn notifications on here."
     },
     "apiKeys": {
       "title": "API 키",

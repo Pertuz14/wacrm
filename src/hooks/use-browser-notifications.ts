@@ -17,6 +17,7 @@ import {
   viewedConversationFromLocation,
   type NotificationLabels,
 } from "@/lib/notifications/browser-notify";
+import { enablePush, isPushActive, isPushSupported } from "@/lib/notifications/push-client";
 
 const serverSnapshot = () => false;
 
@@ -73,6 +74,14 @@ export function useBrowserNotifications(): void {
   // pruned by shouldNotifyForMessage.
   const seenRef = useRef<Map<string, number>>(new Map());
 
+  // Keep this device's push subscription fresh (it can expire or change
+  // with a new deploy). Silent: the settings card reports problems.
+  useEffect(() => {
+    if (!enabled || !isPushSupported()) return;
+    if (getNotificationPermission() !== "granted") return;
+    void enablePush();
+  }, [enabled]);
+
   useEffect(() => {
     if (!enabled) return;
     if (getNotificationPermission() === "unsupported") return;
@@ -128,6 +137,9 @@ export function useBrowserNotifications(): void {
           // Re-check every time: the user can revoke permission in the
           // browser without the preference flipping.
           if (getNotificationPermission() !== "granted") return;
+          // With push on, the service worker shows the alert (even with
+          // the app closed) — don't show a second one from the tab.
+          if (isPushActive()) return;
           const msg = payload.new as Message;
           const shouldNotify = shouldNotifyForMessage(msg, {
             documentVisible: document.visibilityState === "visible",
