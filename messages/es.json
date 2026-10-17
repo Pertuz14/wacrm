@@ -173,7 +173,8 @@
       "clearAll": "Limpiar todo",
       "noConversations": "No se encontraron conversaciones",
       "noMessagesYet": "Aún no hay mensajes",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "channelInstagram": "Instagram"
     },
     "messageThread": {
       "backToConversations": "Volver a las conversaciones",
@@ -258,7 +259,8 @@
         "document": "documento",
         "audio": "audio"
       },
-      "uploadFailed": "Falló la carga."
+      "uploadFailed": "Falló la carga.",
+      "instagramExpiredHint": "Pasaron más de 24 horas desde el último mensaje: Instagram no permite responder hasta que la persona vuelva a escribir."
     },
     "bubble": {
       "photo": "Foto",
@@ -1783,7 +1785,8 @@
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves de API"
+      "api": "Claves de API",
+      "instagram": "Instagram"
     },
     "groups": {
       "account": "Cuenta",
@@ -2034,6 +2037,46 @@
       "textPlaceholder": "El texto del mensaje que se insertará",
       "cancel": "Cancelar",
       "save": "Guardar"
+    },
+    "instagram": {
+      "title": "Instagram",
+      "description": "Recibe y responde los mensajes directos de Instagram en la misma bandeja que WhatsApp. El asistente de IA también los atiende.",
+      "loading": "Cargando…",
+      "connectedAs": "Conectado como @{username}",
+      "notConnected": "Instagram no está conectado",
+      "tokenInfo": "El token se renueva solo cada semana. Última renovación: {date}.",
+      "connectHint": "Pega el token de la app de Meta (empieza con IGAA) y la clave secreta de la app de Instagram.",
+      "tokenLabel": "Token de acceso de Instagram",
+      "secretLabel": "Clave secreta de la app de Instagram",
+      "secretKeep": "Guardada (déjala vacía para mantenerla)",
+      "secretHint": "Ambos están en developers.facebook.com → tu app → Instagram → Configuración de la API con inicio de sesión de Instagram. Se guardan cifrados.",
+      "connect": "Conectar",
+      "reconnect": "Actualizar token",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "¿Desconectar Instagram? Las conversaciones y los contactos se conservan, pero dejarán de llegar mensajes nuevos.",
+      "disconnected": "Instagram desconectado",
+      "connectedToast": "Instagram conectado: @{username}",
+      "subscribeWarning": "Conectado, pero no se pudo activar la suscripción a webhooks: {error}. Actívala a mano en Meta.",
+      "webhookTitle": "Datos para el webhook de Meta",
+      "webhookDesc": "Pégalos en Meta → Instagram → Configurar webhooks y pulsa «Verificar y guardar».",
+      "webhookUrl": "URL de devolución de llamada",
+      "verifyToken": "Token de verificación",
+      "webhookFields": "Suscribe los campos: messages, messaging_postbacks, message_reactions, messaging_seen y comments.",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "aiTitle": "Asistente de IA en Instagram",
+      "aiDesc": "Esta nota se agrega a las instrucciones del asistente cuando responde por Instagram.",
+      "aiDefaultHint": "Si la dejas vacía se usa la nota que ves en gris.",
+      "commentsTitle": "De comentario a mensaje directo",
+      "commentsDesc": "Cuando alguien comenta una palabra clave en una publicación o reel, recibe un mensaje privado automático (una sola vez por comentario).",
+      "commentsEnable": "Activar respuestas automáticas a comentarios",
+      "keywordsLabel": "Palabras clave (separadas por coma)",
+      "keywordsHint": "No distingue mayúsculas ni tildes: «GUÍA», «guia» y «Guía!» cuentan igual.",
+      "dmLabel": "Mensaje privado que se envía",
+      "publicLabel": "Respuesta pública al comentario (opcional)",
+      "publicHint": "Por ejemplo: «¡Te escribimos por mensaje directo! 📩». Déjala vacía para no responder en público.",
+      "save": "Guardar",
+      "saved": "Guardado"
     }
   },
   "SignupPage": {

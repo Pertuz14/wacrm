@@ -16,6 +16,7 @@ import {
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
 import { assertConversationInAccount } from '@/lib/whatsapp/conversation-scope'
 import { supabaseAdmin } from './admin-client'
+import { conversationChannel, sendInstagramToContact } from '@/lib/instagram/send'
 import { getT } from '@/lib/i18n/translate'
 
 const t = getT('LibErrors')
@@ -89,6 +90,35 @@ interface SendTextEngineArgs {
  * `engineSendBase` once the v2 features (templates with variables,
  * media sends) settle.
  */
+/** Persist a bot text send and refresh the conversation preview (Instagram branch). */
+async function persistEngineText(
+  db: ReturnType<typeof supabaseAdmin>,
+  args: SendTextEngineArgs,
+  messageId: string,
+): Promise<void> {
+  const { error: msgErr } = await db.from('messages').insert({
+    conversation_id: args.conversationId,
+    sender_type: 'bot',
+    content_type: 'text',
+    content_text: args.text,
+    message_id: messageId,
+    status: 'sent',
+    ai_generated: args.aiGenerated ?? false,
+  })
+  if (msgErr) {
+    throw new Error(t('send.dbInsertFailed', { message: msgErr.message }))
+  }
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: args.text,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', args.conversationId)
+    .eq('account_id', args.accountId)
+}
+
 export async function engineSendText(
   args: SendTextEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
@@ -107,6 +137,19 @@ export async function engineSendText(
   // Same for the conversation the message lands in — see
   // conversation-scope.ts (GHSA-m4fx-g6pr-hrw8).
   await assertConversationInAccount(db, args.conversationId, args.accountId)
+
+  // Instagram Direct thread → Instagram Messaging API (the AI auto-reply
+  // and the automations' text steps both come through here).
+  if ((await conversationChannel(db, args.conversationId)) === 'instagram') {
+    const { messageId } = await sendInstagramToContact(db, {
+      accountId: args.accountId,
+      contactId: contact.id,
+      kind: 'text',
+      text: args.text,
+    })
+    await persistEngineText(db, args, messageId)
+    return { whatsapp_message_id: messageId }
+  }
 
   // Phone number, or the business-scoped user ID when Meta has never
   // given us a number for this customer (issue #519).

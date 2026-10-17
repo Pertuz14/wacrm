@@ -78,3 +78,22 @@ export function verifyMetaWebhookSignature(
   }
   return ok
 }
+
+/**
+ * Same check against an explicit list of secrets. The Instagram webhook
+ * uses it: Instagram Login signs with the *Instagram* app secret, which
+ * the CRM stores (encrypted) in `instagram_config` next to the token,
+ * so it does not have to be added to META_APP_SECRET by hand.
+ */
+export function verifySignatureWithSecrets(
+  rawBody: string,
+  signatureHeader: string | null,
+  secrets: string[],
+): boolean {
+  if (secrets.length === 0 || !signatureHeader?.startsWith('sha256=')) return false
+  let ok = false
+  for (const secret of secrets) {
+    if (signatureMatches(rawBody, signatureHeader, secret)) ok = true
+  }
+  return ok
+}

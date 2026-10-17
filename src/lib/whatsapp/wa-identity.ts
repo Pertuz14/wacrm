@@ -156,9 +156,12 @@ export function contactHandle(contact: {
   phone?: string | null
   wa_username?: string | null
   wa_user_id?: string | null
+  ig_username?: string | null
 }): string {
   if (contact.phone?.trim()) return contact.phone
   if (contact.wa_username?.trim()) return `@${contact.wa_username.trim()}`
+  // Instagram Direct contacts (migration 050) have no phone
+  if (contact.ig_username?.trim()) return `@${contact.ig_username.trim()} · Instagram`
   return contact.wa_user_id?.trim() ?? ''
 }
 

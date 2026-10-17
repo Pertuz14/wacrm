@@ -3,7 +3,9 @@ import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import {
   engineSendInteractiveButtons,
   engineSendInteractiveList,
+  engineSendText as flowsEngineSendText,
 } from '@/lib/flows/meta-send'
+import { conversationChannel } from '@/lib/instagram/send'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   phoneVariants,
@@ -136,6 +138,21 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   // Same for the conversation the message lands in — see
   // conversation-scope.ts (GHSA-m4fx-g6pr-hrw8).
   await assertConversationInAccount(db, input.conversationId, input.accountId)
+
+  // Instagram Direct thread: text goes through the Instagram sender
+  // (shared with the Flows / AI path); WhatsApp templates don't exist there.
+  if ((await conversationChannel(db, input.conversationId)) === 'instagram') {
+    if (input.kind === 'template') {
+      throw new Error('WhatsApp templates cannot be sent to an Instagram conversation.')
+    }
+    return flowsEngineSendText({
+      accountId: input.accountId,
+      userId: input.userId,
+      conversationId: input.conversationId,
+      contactId: input.contactId,
+      text: input.text,
+    })
+  }
 
   // Phone number, or the business-scoped user ID when Meta has never
   // given us a number for this customer (issue #519).

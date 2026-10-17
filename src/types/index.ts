@@ -115,6 +115,10 @@ export interface Contact {
   /** WhatsApp username without the leading @. Display only: usernames
    *  are user-changeable, so they must never key a contact. */
   wa_username?: string | null;
+  /** Instagram-scoped user ID (migration 050) — set for contacts who wrote by Instagram Direct. */
+  ig_user_id?: string | null;
+  /** Instagram username without the @. Display only. */
+  ig_username?: string | null;
   name?: string;
   email?: string;
   company?: string;
@@ -173,6 +177,8 @@ export interface Conversation {
   user_id: string;
   contact_id: string;
   status: ConversationStatus;
+  /** Inbox channel (migration 050). Missing on rows read before it. */
+  channel?: 'whatsapp' | 'instagram';
   assigned_agent_id?: string;
   last_message_text?: string;
   last_message_at?: string;

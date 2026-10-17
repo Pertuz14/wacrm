@@ -173,7 +173,8 @@
       "clearAll": "모두 지우기",
       "noConversations": "대화를 찾을 수 없습니다",
       "noMessagesYet": "아직 메시지가 없습니다",
-      "unknown": "알 수 없음"
+      "unknown": "알 수 없음",
+      "channelInstagram": "Instagram"
     },
     "messageThread": {
       "backToConversations": "대화 목록으로 돌아가기",
@@ -258,7 +259,8 @@
         "document": "문서",
         "audio": "오디오"
       },
-      "uploadFailed": "업로드에 실패했습니다."
+      "uploadFailed": "업로드에 실패했습니다.",
+      "instagramExpiredHint": "More than 24 hours since their last message: Instagram does not allow replies until the person writes again."
     },
     "bubble": {
       "photo": "사진",
@@ -1783,7 +1785,8 @@
       "fields": "필드 & 태그",
       "deals": "딜 & 통화",
       "members": "팀원",
-      "api": "API 키"
+      "api": "API 키",
+      "instagram": "Instagram"
     },
     "groups": {
       "account": "계정",
@@ -2034,6 +2037,46 @@
       "textPlaceholder": "삽입할 메시지 텍스트",
       "cancel": "취소",
       "save": "저장"
+    },
+    "instagram": {
+      "title": "Instagram",
+      "description": "Receive and answer Instagram direct messages in the same inbox as WhatsApp. The AI assistant answers them too.",
+      "loading": "Loading…",
+      "connectedAs": "Connected as @{username}",
+      "notConnected": "Instagram is not connected",
+      "tokenInfo": "The token renews itself every week. Last renewal: {date}.",
+      "connectHint": "Paste the Meta app token (starts with IGAA) and the Instagram app secret.",
+      "tokenLabel": "Instagram access token",
+      "secretLabel": "Instagram app secret",
+      "secretKeep": "Saved (leave empty to keep it)",
+      "secretHint": "Both are in developers.facebook.com → your app → Instagram → API setup with Instagram login. They are stored encrypted.",
+      "connect": "Connect",
+      "reconnect": "Update token",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect Instagram? Conversations and contacts are kept, but new messages will stop arriving.",
+      "disconnected": "Instagram disconnected",
+      "connectedToast": "Instagram connected: @{username}",
+      "subscribeWarning": "Connected, but the webhook subscription could not be turned on: {error}. Turn it on in Meta.",
+      "webhookTitle": "Webhook details for Meta",
+      "webhookDesc": "Paste them in Meta → Instagram → Configure webhooks and click \"Verify and save\".",
+      "webhookUrl": "Callback URL",
+      "verifyToken": "Verify token",
+      "webhookFields": "Subscribe the fields: messages, messaging_postbacks, message_reactions, messaging_seen and comments.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "aiTitle": "AI assistant on Instagram",
+      "aiDesc": "This note is added to the assistant's instructions when it answers on Instagram.",
+      "aiDefaultHint": "Leave it empty to use the note shown in grey.",
+      "commentsTitle": "Comment to direct message",
+      "commentsDesc": "When someone comments a keyword on a post or reel, they get an automatic private message (once per comment).",
+      "commentsEnable": "Turn on automatic replies to comments",
+      "keywordsLabel": "Keywords (comma separated)",
+      "keywordsHint": "Case and accents are ignored: \"GUIDE\", \"guide\" and \"Guide!\" all match.",
+      "dmLabel": "Private message to send",
+      "publicLabel": "Public reply to the comment (optional)",
+      "publicHint": "For example: \"We sent you a DM! 📩\". Leave it empty to not reply publicly.",
+      "save": "Save",
+      "saved": "Saved"
     }
   },
   "SignupPage": {

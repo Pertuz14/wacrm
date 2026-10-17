@@ -163,11 +163,13 @@ export function buildNotificationContent(
 export function pickContactDisplayName(contact: {
   name?: string | null;
   wa_username?: string | null;
+  ig_username?: string | null;
   phone?: string | null;
 } | null | undefined): string | null {
   if (!contact) return null;
   if (contact.name?.trim()) return contact.name.trim();
   if (contact.wa_username?.trim()) return `@${contact.wa_username.trim()}`;
+  if (contact.ig_username?.trim()) return `@${contact.ig_username.trim()}`;
   if (contact.phone?.trim()) return contact.phone.trim();
   return null;
 }

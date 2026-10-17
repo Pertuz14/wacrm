@@ -50,6 +50,22 @@ BEGIN
       'idx_contacts_account_wa_user_id is missing — migration 040 did not apply';
   END IF;
 
+  -- Instagram channel (050): the IGSID index keeps one contact per
+  -- Instagram sender, and conversations.channel routes every reply.
+  IF to_regclass('public.idx_contacts_account_ig_user_id') IS NULL THEN
+    RAISE EXCEPTION
+      'idx_contacts_account_ig_user_id is missing — migration 050 did not apply';
+  END IF;
+  IF to_regclass('public.instagram_config') IS NULL THEN
+    RAISE EXCEPTION 'public.instagram_config is missing — migration 050 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'conversations' AND column_name = 'channel'
+  ) THEN
+    RAISE EXCEPTION 'conversations.channel is missing — migration 050 did not apply';
+  END IF;
+
   -- 041 repairs create_broadcast_with_recipients, which 037/038 shipped
   -- with an ambiguous bare `RETURNING id, contact_id` (SQLSTATE 42702 on
   -- first call — plpgsql resolves names at execution, not CREATE, so a

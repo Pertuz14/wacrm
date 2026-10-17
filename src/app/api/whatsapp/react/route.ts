@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
-      .select('id, account_id, contact:contacts(phone, wa_user_id)')
+      .select('id, account_id, channel, contact:contacts(phone, wa_user_id)')
       .eq('id', targetMessage.conversation_id)
       .eq('account_id', accountId)
       .maybeSingle();
@@ -78,6 +78,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: t('common.conversationNotFound') },
         { status: 404 },
+      );
+    }
+
+    // Instagram's API only offers a single heart reaction; not supported here.
+    if (conversation.channel === 'instagram') {
+      return NextResponse.json(
+        { error: 'Reactions are not available for Instagram conversations.' },
+        { status: 400 },
       );
     }
 

@@ -47,6 +47,8 @@ import {
   templateBodyParams,
   templateContentText,
 } from '@/lib/whatsapp/template-body';
+import { InstagramSendError, sendInstagramToContact } from '@/lib/instagram/send';
+import { isInsideWindow } from '@/lib/instagram/webhook-parse';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
 export const VALID_MESSAGE_TYPES = [
@@ -233,6 +235,11 @@ export async function sendMessageToConversation(
   }
 
   const contact = conversation.contact;
+
+  // Instagram Direct threads go through the Instagram Messaging API.
+  if (conversation.channel === 'instagram') {
+    return sendToInstagramConversation(db, accountId, conversation, params);
+  }
 
   // A contact is addressable by phone number OR by business-scoped user
   // ID. Meta withholds the phone number for a customer who has adopted
@@ -538,4 +545,126 @@ export async function sendMessageToConversation(
   }
 
   return { messageId: messageRecord.id, whatsappMessageId: waMessageId };
+}
+
+// ------------------------------------------------------------
+// Instagram Direct branch of sendMessageToConversation.
+//
+// Instagram only accepts free-form text and media (image / video /
+// audio) and only inside the 24-hour window after the customer's last
+// message — there are no templates to reopen a closed thread. The
+// window is checked here so the agent gets a clear reason instead of
+// Meta's generic error.
+// ------------------------------------------------------------
+const INSTAGRAM_TYPES = ['text', 'image', 'video', 'audio'] as const;
+
+async function sendToInstagramConversation(
+  db: SupabaseClient,
+  accountId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  conversation: any,
+  params: SendMessageParams
+): Promise<SendMessageResult> {
+  const { conversationId, messageType, contentText, mediaUrl, replyToMessageId } = params;
+
+  if (!(INSTAGRAM_TYPES as readonly string[]).includes(messageType)) {
+    throw new SendMessageError(
+      'instagram_unsupported_type',
+      messageType === 'template'
+        ? 'Instagram has no message templates: you can only reply within 24 hours of the customer’s last message.'
+        : `Instagram does not support "${messageType}" messages. Send text, an image, a video or an audio.`,
+      400
+    );
+  }
+
+  const { data: lastInbound } = await db
+    .from('messages')
+    .select('created_at')
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'customer')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!isInsideWindow(lastInbound?.created_at)) {
+    throw new SendMessageError(
+      'instagram_window_closed',
+      'Instagram only allows replies within 24 hours of the customer’s last message. Wait for them to write again.',
+      400
+    );
+  }
+
+  let replyToMid: string | null = null;
+  if (replyToMessageId) {
+    const { data: parent } = await db
+      .from('messages')
+      .select('message_id')
+      .eq('id', replyToMessageId)
+      .eq('conversation_id', conversationId)
+      .maybeSingle();
+    replyToMid = parent?.message_id ?? null;
+  }
+
+  let igMessageId: string;
+  let captionMessageId: string | undefined;
+  try {
+    const r = await sendInstagramToContact(db, {
+      accountId,
+      contactId: conversation.contact_id,
+      kind: messageType as 'text' | 'image' | 'video' | 'audio',
+      text: contentText ?? null,
+      mediaUrl: mediaUrl ?? null,
+      replyToMid,
+    });
+    igMessageId = r.messageId;
+    captionMessageId = r.captionMessageId;
+  } catch (err) {
+    if (err instanceof InstagramSendError) throw new SendMessageError(err.code, err.message, 400);
+    const message = err instanceof Error ? err.message : 'Unknown Instagram API error';
+    console.error('[send-message] Instagram send failed:', message);
+    throw new SendMessageError('meta_error', `Instagram API error: ${message}`, 502);
+  }
+
+  const { data: messageRecord, error: msgError } = await db
+    .from('messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_type: 'agent',
+      content_type: messageType,
+      // With media, the caption went out as its own message (stored below)
+      content_text: captionMessageId ? null : contentText ?? null,
+      media_url: mediaUrl || null,
+      message_id: igMessageId,
+      status: 'sent',
+      reply_to_message_id: replyToMessageId || null,
+    })
+    .select()
+    .single();
+  if (msgError) {
+    throw new SendMessageError(
+      'db_error',
+      `Message sent to Instagram but failed to save to DB: ${msgError.message}`,
+      500
+    );
+  }
+  if (captionMessageId) {
+    await db.from('messages').insert({
+      conversation_id: conversationId,
+      sender_type: 'agent',
+      content_type: 'text',
+      content_text: contentText ?? null,
+      message_id: captionMessageId,
+      status: 'sent',
+    });
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: contentText || `[${messageType}]`,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conversationId);
+
+  return { messageId: messageRecord.id, whatsappMessageId: igMessageId };
 }

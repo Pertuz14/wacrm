@@ -17,6 +17,8 @@ import {
   loadAccountMetaCredentials,
 } from '@/lib/flows/meta-send'
 import { sendTypingIndicator } from '@/lib/whatsapp/meta-api'
+import { instagramTyping } from '@/lib/instagram/send'
+import { instagramChannelNote } from '@/lib/instagram/channel-note'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
 interface DispatchArgs {
@@ -88,7 +90,7 @@ export async function dispatchInboundToAiReply(
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, channel')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
@@ -137,7 +139,8 @@ export async function dispatchInboundToAiReply(
       // while the retrieval + LLM round trips run. Shown AFTER the pause
       // because Meta clears it after 25 s. Strictly best-effort: a failed
       // indicator must never cost us the reply.
-      await showTypingIndicator(db, accountId, inboundMessageId)
+      if (conv.channel === 'instagram') await instagramTyping(db, accountId, contactId)
+      else await showTypingIndicator(db, accountId, inboundMessageId)
     }
 
     // The pause above may have let more messages in — read the thread now.
@@ -157,7 +160,7 @@ export async function dispatchInboundToAiReply(
     // Prices in Bs at today's BCV rate etc. are substituted into the
     // prompt here, so the model copies amounts instead of computing them.
     const variables = await loadPromptVariables(db, accountId)
-    const systemPrompt = applyTemplateVariables(
+    const basePrompt = applyTemplateVariables(
       buildSystemPrompt({
         userPrompt: config.systemPrompt,
         mode: 'auto_reply',
@@ -165,6 +168,14 @@ export async function dispatchInboundToAiReply(
       }),
       variables,
     )
+    // Instagram threads: tell the model which channel it is answering on
+    // (editable per account in Settings → Instagram).
+    const systemPrompt =
+      conv.channel === 'instagram'
+        ? `${basePrompt}
+
+${await instagramChannelNote(db, accountId)}`
+        : basePrompt
 
     const { text, handoff: sentinelHandoff, usage } = await generateReply({
       config,

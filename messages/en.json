@@ -173,7 +173,8 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "channelInstagram": "Instagram"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",
@@ -258,7 +259,8 @@
         "document": "document",
         "audio": "audio"
       },
-      "uploadFailed": "Upload failed."
+      "uploadFailed": "Upload failed.",
+      "instagramExpiredHint": "More than 24 hours since their last message: Instagram does not allow replies until the person writes again."
     },
     "bubble": {
       "photo": "Photo",
@@ -1783,7 +1785,8 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
-      "api": "API keys"
+      "api": "API keys",
+      "instagram": "Instagram"
     },
     "groups": {
       "account": "Account",
@@ -2034,6 +2037,46 @@
       "textPlaceholder": "The message text to insert",
       "cancel": "Cancel",
       "save": "Save"
+    },
+    "instagram": {
+      "title": "Instagram",
+      "description": "Receive and answer Instagram direct messages in the same inbox as WhatsApp. The AI assistant answers them too.",
+      "loading": "Loading…",
+      "connectedAs": "Connected as @{username}",
+      "notConnected": "Instagram is not connected",
+      "tokenInfo": "The token renews itself every week. Last renewal: {date}.",
+      "connectHint": "Paste the Meta app token (starts with IGAA) and the Instagram app secret.",
+      "tokenLabel": "Instagram access token",
+      "secretLabel": "Instagram app secret",
+      "secretKeep": "Saved (leave empty to keep it)",
+      "secretHint": "Both are in developers.facebook.com → your app → Instagram → API setup with Instagram login. They are stored encrypted.",
+      "connect": "Connect",
+      "reconnect": "Update token",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect Instagram? Conversations and contacts are kept, but new messages will stop arriving.",
+      "disconnected": "Instagram disconnected",
+      "connectedToast": "Instagram connected: @{username}",
+      "subscribeWarning": "Connected, but the webhook subscription could not be turned on: {error}. Turn it on in Meta.",
+      "webhookTitle": "Webhook details for Meta",
+      "webhookDesc": "Paste them in Meta → Instagram → Configure webhooks and click \"Verify and save\".",
+      "webhookUrl": "Callback URL",
+      "verifyToken": "Verify token",
+      "webhookFields": "Subscribe the fields: messages, messaging_postbacks, message_reactions, messaging_seen and comments.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "aiTitle": "AI assistant on Instagram",
+      "aiDesc": "This note is added to the assistant's instructions when it answers on Instagram.",
+      "aiDefaultHint": "Leave it empty to use the note shown in grey.",
+      "commentsTitle": "Comment to direct message",
+      "commentsDesc": "When someone comments a keyword on a post or reel, they get an automatic private message (once per comment).",
+      "commentsEnable": "Turn on automatic replies to comments",
+      "keywordsLabel": "Keywords (comma separated)",
+      "keywordsHint": "Case and accents are ignored: \"GUIDE\", \"guide\" and \"Guide!\" all match.",
+      "dmLabel": "Private message to send",
+      "publicLabel": "Public reply to the comment (optional)",
+      "publicHint": "For example: \"We sent you a DM! 📩\". Leave it empty to not reply publicly.",
+      "save": "Save",
+      "saved": "Saved"
     }
   },
   "SignupPage": {

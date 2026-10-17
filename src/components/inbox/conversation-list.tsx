@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { InstagramGlyph } from "./instagram-glyph";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -459,7 +460,7 @@ function ConversationItem({
       )}
     >
       {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
@@ -468,6 +469,14 @@ function ConversationItem({
           />
         ) : (
           initials
+        )}
+        {conversation.channel === "instagram" && (
+          <span
+            className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 via-pink-500 to-purple-600 text-white ring-2 ring-card"
+            title={t("channelInstagram")}
+          >
+            <InstagramGlyph className="h-2.5 w-2.5" />
+          </span>
         )}
       </div>
 
