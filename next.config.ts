@@ -79,6 +79,16 @@ const nextConfig: NextConfig = {
   output: "standalone",
 
   /**
+   * Build workers. Next starts one per CPU it sees; on Hostinger's build
+   * machine that was 63, and the container's thread limit aborted the
+   * build ("OS can't spawn worker thread", SIGABRT). A couple of workers
+   * is plenty for this app. Override with NEXT_BUILD_CPUS.
+   */
+  experimental: {
+    cpus: Number(process.env.NEXT_BUILD_CPUS) || 2,
+  },
+
+  /**
    * Cross-origin dev access (Next.js 16).
    *
    * Next 16 blocks requests to dev-only resources (`/_next/*` internals,
