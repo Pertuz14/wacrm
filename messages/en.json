@@ -2298,6 +2298,8 @@
       "stageVerifyHint": "When the receipt and the registration form arrive.",
       "stageLost": "Lost / no reply",
       "stageLostHint": "After the days below without a customer message. If they write again, the deal comes back.",
+      "stageWon": "Purchase completed (optional)",
+      "stageWonHint": "Where sales registered on your platform land, marked won with their USD value. If empty, a stage named like “Purchase completed” is used.",
       "lostAfterDays": "Days without reply",
       "lostAfterDaysDesc": "A deal moves to “Lost” when the customer has not written for this many days.",
       "manualNote": "Deals only move forward, and any stage you choose by hand that is not in this list (for example “Purchase completed”) is never touched by the assistant.",

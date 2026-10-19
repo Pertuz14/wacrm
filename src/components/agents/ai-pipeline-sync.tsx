@@ -31,7 +31,7 @@ interface PipelineOption {
   stages: { id: string; name: string }[];
 }
 
-type StageField = 'stage_new_id' | 'stage_interested_id' | 'stage_verify_id' | 'stage_lost_id';
+type StageField = 'stage_new_id' | 'stage_interested_id' | 'stage_verify_id' | 'stage_lost_id' | 'stage_won_id';
 
 interface SyncState {
   enabled: boolean;
@@ -40,6 +40,7 @@ interface SyncState {
   stage_interested_id: string | null;
   stage_verify_id: string | null;
   stage_lost_id: string | null;
+  stage_won_id: string | null;
   lost_after_days: number;
   pipelines: PipelineOption[];
 }
@@ -53,6 +54,9 @@ const STAGE_FIELDS: { field: StageField; labelKey: string; hintKey: string }[] =
   { field: 'stage_verify_id', labelKey: 'stageVerify', hintKey: 'stageVerifyHint' },
   { field: 'stage_lost_id', labelKey: 'stageLost', hintKey: 'stageLostHint' },
 ];
+
+// Optional: closed sales reported by the store (POST /api/v1/sales).
+const WON_FIELD = { field: 'stage_won_id' as const, labelKey: 'stageWon', hintKey: 'stageWonHint' };
 
 export function AiPipelineSync() {
   const t = useTranslations('Agents.pipelineSync');
@@ -114,6 +118,7 @@ export function AiPipelineSync() {
         toast.error(t('errorIncomplete'));
         return;
       }
+      if (state.stage_won_id) ids.push(state.stage_won_id);
       if (new Set(ids).size !== ids.length) {
         toast.error(t('errorDuplicate'));
         return;
@@ -131,6 +136,7 @@ export function AiPipelineSync() {
           stage_interested_id: state.stage_interested_id,
           stage_verify_id: state.stage_verify_id,
           stage_lost_id: state.stage_lost_id,
+          stage_won_id: state.stage_won_id,
           lost_after_days: n,
         }),
       });
@@ -185,6 +191,7 @@ export function AiPipelineSync() {
                     stage_interested_id: null,
                     stage_verify_id: null,
                     stage_lost_id: null,
+                    stage_won_id: null,
                   })
                 }
                 disabled={disabled}
@@ -205,7 +212,7 @@ export function AiPipelineSync() {
 
             {pipeline && (
               <div className="grid gap-4 sm:grid-cols-2">
-                {STAGE_FIELDS.map(({ field, labelKey, hintKey }) => (
+                {[...STAGE_FIELDS, WON_FIELD].map(({ field, labelKey, hintKey }) => (
                   <div key={field} className="space-y-1.5">
                     <Label>{t(labelKey)}</Label>
                     <Select

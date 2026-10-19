@@ -2298,6 +2298,8 @@
       "stageVerifyHint": "Cuando llegan la captura y el registro.",
       "stageLost": "Perdido / sin respuesta",
       "stageLostHint": "Tras los días de abajo sin mensajes del cliente. Si vuelve a escribir, el trato regresa.",
+      "stageWon": "Compra finalizada (opcional)",
+      "stageWonHint": "Aquí llegan las ventas que registras en tu plataforma, marcadas como ganadas y con su valor en USD. Si lo dejas vacío, se usa una etapa llamada como “Compra finalizada”.",
       "lostAfterDays": "Días sin respuesta",
       "lostAfterDaysDesc": "Un trato pasa a “Perdido” cuando el cliente no escribe durante esta cantidad de días.",
       "manualNote": "Los tratos solo avanzan, y cualquier etapa que elijas a mano que no esté en esta lista (por ejemplo “Compra finalizada”) el asistente nunca la toca.",

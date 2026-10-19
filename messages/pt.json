@@ -2298,6 +2298,8 @@
       "stageVerifyHint": "Quando chegam o comprovante e o cadastro.",
       "stageLost": "Perdido / sem resposta",
       "stageLostHint": "Após os dias abaixo sem mensagens do cliente. Se ele voltar a escrever, o negócio volta.",
+      "stageWon": "Compra finalizada (opcional)",
+      "stageWonHint": "Aqui chegam as vendas registradas na sua plataforma, marcadas como ganhas e com o valor em USD. Se ficar vazio, usa-se uma etapa chamada como “Compra finalizada”.",
       "lostAfterDays": "Dias sem resposta",
       "lostAfterDaysDesc": "Um negócio vai para “Perdido” quando o cliente não escreve por esta quantidade de dias.",
       "manualNote": "Os negócios só avançam, e qualquer etapa escolhida manualmente que não esteja nesta lista (por exemplo “Compra finalizada”) nunca é alterada pelo assistente.",

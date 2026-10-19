@@ -36,6 +36,8 @@ export interface PipelineSyncSettings {
   stageInterestedId: string | null
   stageVerifyId: string | null
   stageLostId: string | null
+  /** Optional: where sales closed through POST /api/v1/sales land. */
+  stageWonId: string | null
   lostAfterDays: number
   lastSweepAt: string | null
 }
@@ -47,12 +49,13 @@ interface SyncRow {
   stage_interested_id: string | null
   stage_verify_id: string | null
   stage_lost_id: string | null
+  stage_won_id?: string | null
   lost_after_days: number
   last_sweep_at: string | null
 }
 
 export const SYNC_COLUMNS =
-  'enabled, pipeline_id, stage_new_id, stage_interested_id, stage_verify_id, stage_lost_id, lost_after_days, last_sweep_at'
+  'enabled, pipeline_id, stage_new_id, stage_interested_id, stage_verify_id, stage_lost_id, stage_won_id, lost_after_days, last_sweep_at'
 
 export function rowToSettings(row: SyncRow | null): PipelineSyncSettings {
   return {
@@ -62,6 +65,7 @@ export function rowToSettings(row: SyncRow | null): PipelineSyncSettings {
     stageInterestedId: row?.stage_interested_id ?? null,
     stageVerifyId: row?.stage_verify_id ?? null,
     stageLostId: row?.stage_lost_id ?? null,
+    stageWonId: row?.stage_won_id ?? null,
     lostAfterDays: row?.lost_after_days ?? 20,
     lastSweepAt: row?.last_sweep_at ?? null,
   }
@@ -122,17 +126,31 @@ export function decideStageMove(
   return STAGE_RANK[target] > STAGE_RANK[current] ? stageId(s, target) : null
 }
 
+/** Columns of migration 048 only — read when 051 (stage_won_id) is not applied yet. */
+const SYNC_COLUMNS_048 = SYNC_COLUMNS.replace(', stage_won_id', '')
+
+/**
+ * Read the account's sync row. Falls back to the pre-051 columns so the
+ * deal sync keeps working when the code is deployed before the migration.
+ */
+export async function selectSyncRow(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<{ data: SyncRow | null; error: unknown }> {
+  const read = (columns: string) =>
+    db.from('ai_pipeline_sync').select(columns).eq('account_id', accountId).maybeSingle()
+  let res = await read(SYNC_COLUMNS)
+  if ((res.error as { code?: string } | null)?.code === '42703') res = await read(SYNC_COLUMNS_048)
+  return { data: (res.data as SyncRow | null) ?? null, error: res.error }
+}
+
 export async function loadPipelineSync(
   db: SupabaseClient,
   accountId: string,
 ): Promise<PipelineSyncSettings | null> {
-  const { data, error } = await db
-    .from('ai_pipeline_sync')
-    .select(SYNC_COLUMNS)
-    .eq('account_id', accountId)
-    .maybeSingle()
+  const { data, error } = await selectSyncRow(db, accountId)
   if (error || !data) return null
-  return rowToSettings(data as SyncRow)
+  return rowToSettings(data)
 }
 
 /**
@@ -272,4 +290,105 @@ async function lastCustomerMessageAt(
     .order('created_at', { ascending: false })
     .limit(1)
   return ((msg ?? []) as { created_at: string }[])[0]?.created_at ?? null
+}
+
+/** Stage names that mean "the sale closed" when no won stage is configured. */
+const WON_NAME = /compra\s+finalizada|finalizad|ganad|cerrad|\bwon\b|complet/i
+
+/**
+ * The stage a closed sale goes to: the configured one, or else a stage of
+ * the synced pipeline whose name reads like "Compra finalizada".
+ */
+export async function resolveWonStage(
+  db: SupabaseClient,
+  settings: PipelineSyncSettings,
+): Promise<string | null> {
+  if (!settings.pipelineId) return null
+  if (settings.stageWonId) return settings.stageWonId
+  const { data } = await db
+    .from('pipeline_stages')
+    .select('id, name')
+    .eq('pipeline_id', settings.pipelineId)
+    .order('position', { ascending: true })
+  const stages = (data ?? []) as { id: string; name: string }[]
+  return stages.find((st) => WON_NAME.test(st.name))?.id ?? null
+}
+
+export interface ClosedSaleResult {
+  dealId: string
+  stageId: string
+  created: boolean
+}
+
+/**
+ * Mark the contact's deal as won in the won stage, with the sale's value
+ * in USD; creates the deal when the contact has none in the pipeline.
+ * Returns null when no pipeline / won stage is set up (nothing to move).
+ */
+export async function closeWonDeal(
+  db: SupabaseClient,
+  args: {
+    accountId: string
+    contactId: string
+    conversationId: string | null
+    auditUserId: string
+    title: string
+    valueUsd: number
+    note?: string | null
+  },
+): Promise<ClosedSaleResult | null> {
+  const settings = await loadPipelineSync(db, args.accountId)
+  if (!settings?.pipelineId) return null
+  const wonStage = await resolveWonStage(db, settings)
+  if (!wonStage) return null
+  const now = new Date().toISOString()
+
+  const { data: existing } = await db
+    .from('deals')
+    .select('id, notes')
+    .eq('account_id', args.accountId)
+    .eq('pipeline_id', settings.pipelineId)
+    .eq('contact_id', args.contactId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const deal = (existing as { id: string; notes: string | null }[] | null)?.[0]
+
+  if (deal) {
+    const notes = args.note ? [deal.notes?.trim(), args.note].filter(Boolean).join('\n') : deal.notes
+    const { error } = await db
+      .from('deals')
+      .update({
+        stage_id: wonStage,
+        status: 'won',
+        title: args.title,
+        value: args.valueUsd,
+        currency: 'USD',
+        notes,
+        updated_at: now,
+      })
+      .eq('id', deal.id)
+      .eq('account_id', args.accountId)
+    if (error) throw error
+    return { dealId: deal.id, stageId: wonStage, created: false }
+  }
+
+  const { data: created, error } = await db
+    .from('deals')
+    .insert({
+      account_id: args.accountId,
+      user_id: args.auditUserId,
+      pipeline_id: settings.pipelineId,
+      stage_id: wonStage,
+      contact_id: args.contactId,
+      conversation_id: args.conversationId,
+      title: args.title,
+      value: args.valueUsd,
+      currency: 'USD',
+      notes: args.note ?? null,
+      status: 'won',
+    })
+    .select('id')
+    .single()
+  if (error || !created) throw error ?? new Error('deal insert failed')
+  return { dealId: (created as { id: string }).id, stageId: wonStage, created: true }
 }

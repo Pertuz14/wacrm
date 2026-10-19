@@ -3,8 +3,8 @@ import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/acco
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import {
-  SYNC_COLUMNS,
   rowToSettings,
+  selectSyncRow,
   sweepStaleDeals,
   type PipelineSyncSettings,
 } from '@/lib/ai/pipeline-sync'
@@ -27,6 +27,7 @@ function toResponse(settings: PipelineSyncSettings, pipelines: unknown[]) {
     stage_interested_id: settings.stageInterestedId,
     stage_verify_id: settings.stageVerifyId,
     stage_lost_id: settings.stageLostId,
+    stage_won_id: settings.stageWonId,
     lost_after_days: settings.lostAfterDays,
     pipelines,
   }
@@ -71,7 +72,7 @@ export async function GET() {
   try {
     const { supabase, accountId } = await getCurrentAccount()
     const [{ data }, pipelines] = await Promise.all([
-      supabase.from('ai_pipeline_sync').select(SYNC_COLUMNS).eq('account_id', accountId).maybeSingle(),
+      selectSyncRow(supabase, accountId),
       listPipelines(supabase, accountId),
     ])
     const settings = rowToSettings(data as Parameters<typeof rowToSettings>[0])
@@ -111,9 +112,24 @@ export async function POST(request: Request) {
       stage_verify_id: str(body.stage_verify_id),
       stage_lost_id: str(body.stage_lost_id),
     }
+    // Optional: where sales reported through POST /api/v1/sales land.
+    const stageWonId = str(body.stage_won_id)
     const days = Math.floor(Number(body.lost_after_days))
     if (!Number.isFinite(days) || days < 1 || days > 365) {
       return NextResponse.json({ error: t('ai.pipelineSyncInvalid') }, { status: 400 })
+    }
+
+    if (stageWonId && Object.values(stages).includes(stageWonId)) {
+      return NextResponse.json({ error: t('ai.pipelineSyncInvalid') }, { status: 400 })
+    }
+    if (stageWonId && pipelineId) {
+      const { data: won } = await supabase
+        .from('pipeline_stages')
+        .select('id')
+        .eq('pipeline_id', pipelineId)
+        .eq('id', stageWonId)
+        .maybeSingle()
+      if (!won) return NextResponse.json({ error: t('ai.pipelineSyncInvalid') }, { status: 400 })
     }
 
     if (enabled) {
@@ -137,27 +153,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const { error } = await supabase.from('ai_pipeline_sync').upsert(
-      {
-        account_id: accountId,
-        enabled,
-        pipeline_id: pipelineId,
-        ...stages,
-        lost_after_days: days,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'account_id' },
-    )
+    const row = {
+      account_id: accountId,
+      enabled,
+      pipeline_id: pipelineId,
+      ...stages,
+      stage_won_id: pipelineId ? stageWonId : null,
+      lost_after_days: days,
+      updated_at: new Date().toISOString(),
+    }
+    let { error } = await supabase.from('ai_pipeline_sync').upsert(row, { onConflict: 'account_id' })
+    if (error?.code === 'PGRST204' || error?.code === '42703') {
+      // Migration 051 not applied yet: save everything but the won stage.
+      const rest: Partial<typeof row> = { ...row }
+      delete rest.stage_won_id
+      ;({ error } = await supabase.from('ai_pipeline_sync').upsert(rest, { onConflict: 'account_id' }))
+    }
     if (error) {
       console.error('[ai/pipeline-sync POST] save failed:', error)
       return NextResponse.json({ error: t('ai.pipelineSyncSaveFailed') }, { status: 500 })
     }
 
-    const { data } = await supabase
-      .from('ai_pipeline_sync')
-      .select(SYNC_COLUMNS)
-      .eq('account_id', accountId)
-      .maybeSingle()
+    const { data } = await selectSyncRow(supabase, accountId)
     return NextResponse.json(
       toResponse(
         rowToSettings(data as Parameters<typeof rowToSettings>[0]),
