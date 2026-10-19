@@ -26,16 +26,35 @@ interface AlertTarget {
   contactId: string
 }
 
-async function contactLine(db: Db, target: AlertTarget): Promise<string> {
+interface ContactInfo {
+  name: string | null
+  phone: string | null
+}
+
+async function loadContact(db: Db, target: AlertTarget): Promise<ContactInfo | null> {
   const { data } = await db
     .from('contacts')
     .select('name, phone')
     .eq('id', target.contactId)
     .eq('account_id', target.accountId)
     .maybeSingle()
-  const contact = data as { name: string | null; phone: string | null } | null
+  return data as ContactInfo | null
+}
+
+function contactLineOf(contact: ContactInfo | null): string {
   const phone = contact?.phone ? `+${contact.phone.replace(/^\+/, '')}` : ''
   return [contact?.name?.trim(), phone].filter(Boolean).join(' · ') || 'Cliente'
+}
+
+async function contactLine(db: Db, target: AlertTarget): Promise<string> {
+  return contactLineOf(await loadContact(db, target))
+}
+
+/** +584121234567 → 0412-1234567 (as typed in the platform's form); others unchanged. */
+export function localPhone(phone: string | null | undefined): string {
+  const digits = String(phone ?? '').replace(/\D/g, '')
+  if (/^58\d{10}$/.test(digits)) return `0${digits.slice(2, 5)}-${digits.slice(5)}`
+  return digits ? `+${digits}` : ''
 }
 
 function conversationLink(conversationId: string): string | null {
@@ -119,11 +138,40 @@ async function loadImageBytes(
   }
 }
 
-function formatRegistroFields(fields: Record<string, string>): string {
-  return Object.entries(fields)
-    .filter(([, v]) => v)
-    .map(([k, v]) => `• ${k}: ${v}`)
-    .join('\n')
+/**
+ * The detected fields in the order of the platform's "Registrar venta y
+ * acceso" form (correo, nombre, teléfono, área, canal, productos, plan,
+ * referencia), so the owner can copy them top to bottom. Unknown keys
+ * go last.
+ */
+const FORM_ORDER: [string, string][] = [
+  ['correo', 'Correo'],
+  ['nombre', 'Nombre'],
+  ['telefono', 'Teléfono'],
+  ['area', 'Área'],
+  ['canal', 'Canal'],
+  ['producto', 'Productos'],
+  ['plan', 'Plan de pago'],
+  ['monto', 'Monto'],
+  ['ref6', 'Referencia'],
+]
+
+export function formatRegistroFields(
+  fields: Record<string, string>,
+  phone?: string | null,
+): string {
+  const values: Record<string, string> = {}
+  for (const [k, v] of Object.entries(fields)) {
+    if (v?.trim()) values[k.trim().toLowerCase()] = v.trim()
+  }
+  if (!values.telefono && phone) values.telefono = localPhone(phone)
+  if (!values.canal) values.canal = 'WhatsApp'
+  const known = new Set(FORM_ORDER.map(([k]) => k))
+  const lines = FORM_ORDER.filter(([k]) => values[k]).map(([k, label]) => `${label}: ${values[k]}`)
+  const extra = Object.entries(values)
+    .filter(([k]) => !known.has(k))
+    .map(([k, v]) => `${k.charAt(0).toUpperCase()}${k.slice(1)}: ${v}`)
+  return [...lines, ...extra].join('\n')
 }
 
 /** Payment receipt + registration to verify. */
@@ -134,18 +182,20 @@ export async function alertPaymentToVerify(
 ): Promise<void> {
   if (!isTelegramConfigured()) return
   try {
-    const [who, registro, image] = await Promise.all([
-      contactLine(db, target),
+    const [contact, registro, image] = await Promise.all([
+      loadContact(db, target),
       latestRegistroText(db, target.conversationId),
       latestCustomerImage(db, target.conversationId),
     ])
+    const who = contactLineOf(contact)
     const link = conversationLink(target.conversationId)
-    const extracted = registroFields ? formatRegistroFields(registroFields) : ''
+    const extracted = registroFields ? formatRegistroFields(registroFields, contact?.phone) : ''
     const text = [
       '💰 Pago por verificar',
       `👤 ${who}`,
-      registro ? `📝 Registro enviado por el cliente:\n${registro}` : '',
-      extracted ? `🔎 Datos detectados:\n${extracted}` : '',
+      // Form order first, ready to copy; the customer's own text below for anything extra.
+      extracted ? `📋 Para registrar el acceso (en orden):\n${extracted}` : '',
+      registro ? `📝 Lo que escribió el cliente:\n${registro}` : '',
       image ? '' : '⚠️ No encontré la captura del pago en el chat.',
       link ? `🔗 ${link}` : '',
     ]
