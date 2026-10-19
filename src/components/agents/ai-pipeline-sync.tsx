@@ -104,6 +104,15 @@ export function AiPipelineSync() {
 
   const pipeline = state.pipelines.find((p) => p.id === state.pipeline_id) ?? null;
   const disabled = !canEdit || saving;
+  // Base UI's Select.Value shows the raw value (a UUID) unless it knows the labels.
+  const pipelineItems: Record<string, string> = {
+    [NONE]: t('pipelinePlaceholder'),
+    ...Object.fromEntries(state.pipelines.map((p) => [p.id, p.name || '—'])),
+  };
+  const stageItems: Record<string, string> = {
+    [NONE]: t('stageNone'),
+    ...Object.fromEntries((pipeline?.stages ?? []).map((st) => [st.id, st.name])),
+  };
   const set = (patch: Partial<SyncState>) => setState((s) => (s ? { ...s, ...patch } : s));
 
   const handleSave = async () => {
@@ -182,6 +191,7 @@ export function AiPipelineSync() {
             <div className="space-y-2 sm:max-w-sm">
               <Label>{t('pipeline')}</Label>
               <Select
+                items={pipelineItems}
                 value={state.pipeline_id ?? NONE}
                 onValueChange={(v) =>
                   // A new pipeline invalidates the stage picks.
@@ -216,6 +226,7 @@ export function AiPipelineSync() {
                   <div key={field} className="space-y-1.5">
                     <Label>{t(labelKey)}</Label>
                     <Select
+                      items={stageItems}
                       value={state[field] ?? NONE}
                       onValueChange={(v) =>
                         set({ [field]: v === NONE ? null : v } as Partial<SyncState>)
