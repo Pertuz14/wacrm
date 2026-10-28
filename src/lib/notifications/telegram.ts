@@ -68,6 +68,28 @@ async function call(
   }
 }
 
+/** Like `call`, but also returns Telegram's `result` (e.g. the sent message). */
+async function callJson<T>(
+  config: TelegramConfig,
+  method: string,
+  body: Record<string, unknown>,
+): Promise<{ ok: boolean; result?: T; description?: string }> {
+  try {
+    const res = await fetch(`${TELEGRAM_API}/bot${config.token}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    const data = (await res.json().catch(() => null)) as
+      | { ok?: boolean; result?: T; description?: string }
+      | null
+    return { ok: res.ok && data?.ok === true, result: data?.result, description: data?.description }
+  } catch (err) {
+    return { ok: false, description: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export interface TelegramResult {
   ok: boolean
   /** Telegram's error text for the first failure, for the test button. */
@@ -112,4 +134,112 @@ export async function sendTelegramImage(args: {
     if (!r.ok && !error) error = r.description ?? 'send_failed'
   }
   return error ? { ok: false, error } : { ok: true }
+}
+
+// ── Buttons under an alert (one-tap "enable access") ─────────────
+// Telegram calls back POST /api/telegram/webhook when a button is
+// tapped. Only the FIRST id in TELEGRAM_CHAT_ID (the owner) gets the
+// action buttons and may use them; other chats get the plain alert.
+
+export type TelegramButton =
+  | { text: string; callback_data: string }
+  | { text: string; url: string }
+
+/** One button per row. */
+function keyboard(buttons: TelegramButton[] | undefined) {
+  return buttons?.length ? { inline_keyboard: buttons.map((b) => [b]) } : undefined
+}
+
+export function telegramOwnerChatId(): string | null {
+  return getTelegramConfig()?.chatIds[0] ?? null
+}
+
+/**
+ * Secret Telegram echoes in X-Telegram-Bot-Api-Secret-Token on every
+ * webhook call. Derived from the bot token, so there is nothing extra to
+ * configure, and a caller without the token cannot forge it.
+ */
+export async function telegramWebhookSecret(): Promise<string | null> {
+  const config = getTelegramConfig()
+  if (!config) return null
+  const data = new TextEncoder().encode(`wacrm-telegram-webhook:${config.token}`)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 64)
+}
+
+export interface SentMessage {
+  chat_id: string
+  message_id: number
+}
+
+/**
+ * The alert text to every chat; only the owner's copy carries `buttons`.
+ * Returns where each copy landed (to edit it later).
+ */
+export async function sendTelegramTextWithButtons(
+  text: string,
+  buttons: TelegramButton[],
+): Promise<TelegramResult & { sent: SentMessage[] }> {
+  const config = getTelegramConfig()
+  if (!config) return { ok: false, error: 'not_configured', sent: [] }
+  const sent: SentMessage[] = []
+  let error: string | undefined
+  for (const [i, chatId] of config.chatIds.entries()) {
+    const r = await callJson<{ message_id: number }>(config, 'sendMessage', {
+      chat_id: chatId,
+      text: truncate(text, MAX_TEXT),
+      link_preview_options: { is_disabled: true },
+      reply_markup: i === 0 ? keyboard(buttons) : undefined,
+    })
+    if (r.ok && r.result) sent.push({ chat_id: chatId, message_id: r.result.message_id })
+    else if (!error) error = r.description ?? 'send_failed'
+  }
+  return error ? { ok: false, error, sent } : { ok: true, sent }
+}
+
+/** Replace a sent message's text (and its buttons; none removes them). */
+export async function editTelegramText(
+  message: SentMessage,
+  text: string,
+  buttons?: TelegramButton[],
+): Promise<TelegramResult> {
+  const config = getTelegramConfig()
+  if (!config) return { ok: false, error: 'not_configured' }
+  const r = await call(config, 'editMessageText', {
+    chat_id: message.chat_id,
+    message_id: message.message_id,
+    text: truncate(text, MAX_TEXT),
+    link_preview_options: { is_disabled: true },
+    reply_markup: keyboard(buttons) ?? { inline_keyboard: [] },
+  })
+  return r.ok ? { ok: true } : { ok: false, error: r.description }
+}
+
+/** The small toast Telegram shows after a button tap. */
+export async function answerTelegramCallback(callbackId: string, text: string): Promise<void> {
+  const config = getTelegramConfig()
+  if (!config) return
+  await call(config, 'answerCallbackQuery', { callback_query_id: callbackId, text: truncate(text, 200) })
+}
+
+let webhookReadyFor: string | null = null
+
+/**
+ * Point the bot's updates at this app (button taps only). Idempotent and
+ * cached per process; best-effort. NEXT_PUBLIC_SITE_URL must be https.
+ */
+export async function ensureTelegramWebhook(): Promise<TelegramResult> {
+  const config = getTelegramConfig()
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, '')
+  if (!config) return { ok: false, error: 'not_configured' }
+  if (!site || !site.startsWith('https://')) return { ok: false, error: 'NEXT_PUBLIC_SITE_URL must be https' }
+  const url = `${site}/api/telegram/webhook`
+  if (webhookReadyFor === url) return { ok: true }
+  const r = await call(config, 'setWebhook', {
+    url,
+    secret_token: await telegramWebhookSecret(),
+    allowed_updates: ['callback_query'],
+  })
+  if (r.ok) webhookReadyFor = url
+  return r.ok ? { ok: true } : { ok: false, error: r.description }
 }

@@ -2,10 +2,13 @@ import type { supabaseAdmin } from './admin-client'
 import { loadAccountMetaCredentials } from '@/lib/flows/meta-send'
 import { downloadMedia, getMediaUrl } from '@/lib/whatsapp/meta-api'
 import {
+  ensureTelegramWebhook,
   isTelegramConfigured,
   sendTelegramImage,
   sendTelegramText,
+  sendTelegramTextWithButtons,
 } from '@/lib/notifications/telegram'
+import { alertButtons, previewRegistration } from './payment-alerts'
 
 // ============================================================
 // Alerts the assistant raises to the business owner (over Telegram):
@@ -152,6 +155,7 @@ const FORM_ORDER: [string, string][] = [
   ['canal', 'Canal'],
   ['producto', 'Productos'],
   ['plan', 'Plan de pago'],
+  ['metodo', 'Método de pago'],
   ['monto', 'Monto'],
   ['ref6', 'Referencia'],
 ]
@@ -174,6 +178,34 @@ export function formatRegistroFields(
   return [...lines, ...extra].join('\n')
 }
 
+/**
+ * Store the alert for the one-tap "enable access" button (migration 052).
+ * null when the table doesn't exist yet: the alert is then sent as before.
+ */
+async function createPaymentAlert(
+  db: Db,
+  target: AlertTarget,
+  fields: Record<string, string>,
+  phone: string | null,
+): Promise<string | null> {
+  const { data, error } = await db
+    .from('payment_alerts')
+    .insert({
+      account_id: target.accountId,
+      conversation_id: target.conversationId,
+      contact_id: target.contactId,
+      phone,
+      fields,
+    })
+    .select('id')
+    .single()
+  if (error) {
+    console.warn('[bot alerts] payment alert not stored (run migration 052?):', error.message)
+    return null
+  }
+  return (data as { id: string }).id
+}
+
 /** Payment receipt + registration to verify. */
 export async function alertPaymentToVerify(
   db: Db,
@@ -190,11 +222,26 @@ export async function alertPaymentToVerify(
     const who = contactLineOf(contact)
     const link = conversationLink(target.conversationId)
     const extracted = registroFields ? formatRegistroFields(registroFields, contact?.phone) : ''
+
+    // One-tap registration: store the alert and ask the platform what it would register
+    const alertId = registroFields
+      ? await createPaymentAlert(db, target, registroFields, contact?.phone ?? null)
+      : null
+    const preview = alertId && registroFields
+      ? await previewRegistration(registroFields, contact?.phone ?? null)
+      : null
+    let registerBlock = extracted ? `📋 Para registrar el acceso (en orden):\n${extracted}` : ''
+    if (preview) {
+      registerBlock = preview.listo
+        ? `🧾 Se registrará al tocar «Habilitar acceso» (verifique antes el pago en su banco):\n${preview.resumen}`
+        : `🧾 Revíselo en el formulario (falta o hay que revisar: ${preview.faltan.join(', ')}):\n${preview.resumen}`
+    }
+
     const text = [
       '💰 Pago por verificar',
       `👤 ${who}`,
-      // Form order first, ready to copy; the customer's own text below for anything extra.
-      extracted ? `📋 Para registrar el acceso (en orden):\n${extracted}` : '',
+      // What will be registered first; the customer's own text below for anything extra.
+      registerBlock,
       registro ? `📝 Lo que escribió el cliente:\n${registro}` : '',
       image ? '' : '⚠️ No encontré la captura del pago en el chat.',
       link ? `🔗 ${link}` : '',
@@ -202,8 +249,19 @@ export async function alertPaymentToVerify(
       .filter(Boolean)
       .join('\n\n')
 
-    const sent = await sendTelegramText(text)
-    if (!sent.ok) console.warn('[bot alerts] payment alert not sent:', sent.error)
+    if (alertId) {
+      const hook = await ensureTelegramWebhook()
+      if (!hook.ok) console.warn('[bot alerts] Telegram webhook not set:', hook.error)
+      const sent = await sendTelegramTextWithButtons(text, alertButtons(alertId, preview?.listo === true))
+      if (!sent.ok) console.warn('[bot alerts] payment alert not sent:', sent.error)
+      await db
+        .from('payment_alerts')
+        .update({ message_text: text, telegram: sent.sent })
+        .eq('id', alertId)
+    } else {
+      const sent = await sendTelegramText(text)
+      if (!sent.ok) console.warn('[bot alerts] payment alert not sent:', sent.error)
+    }
 
     if (image) {
       const file = await loadImageBytes(db, target.accountId, image)

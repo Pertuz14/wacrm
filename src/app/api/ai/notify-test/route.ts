@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
-import { isTelegramConfigured, sendTelegramText } from '@/lib/notifications/telegram'
+import { ensureTelegramWebhook, isTelegramConfigured, sendTelegramText } from '@/lib/notifications/telegram'
 import { getT } from '@/lib/i18n/translate'
 
 const t = getT('Api')
@@ -31,6 +31,9 @@ export async function POST() {
         { status: 502 },
       )
     }
+    // Also point button taps («Habilitar acceso») at this app; best-effort
+    const hook = await ensureTelegramWebhook()
+    if (!hook.ok) console.warn('[notify-test] Telegram webhook not set:', hook.error)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return toErrorResponse(err)
