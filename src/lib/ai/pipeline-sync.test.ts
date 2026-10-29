@@ -3,6 +3,9 @@ import {
   closeWonDeal,
   decideStageMove,
   isUsable,
+  pickProgramPipeline,
+  programFromActions,
+  programFromText,
   resolveWonStage,
   rowToSettings,
   targetStageFromActions,
@@ -68,6 +71,57 @@ describe('decideStageMove', () => {
 
   it('leaves stages the owner manages alone (e.g. purchase completed)', () => {
     expect(decideStageMove(S, 'purchase-completed', 'verify')).toBeNull()
+  })
+})
+
+describe('programs', () => {
+  const SIMADI = { ...S, program: 'simadi' as const }
+  const UCAB = {
+    program: 'ucab' as const,
+    pipelineId: 'pipe-ucab',
+    stageNewId: 'u-new',
+    stageInterestedId: 'u-int',
+    stageVerifyId: 'u-ver',
+    stageLostId: 'u-lost',
+    stageWonId: null,
+  }
+  const PROPE = { ...UCAB, program: 'propedeutico' as const, pipelineId: 'pipe-prope' }
+
+  it('reads the program from the bot labels and the REGISTRO', () => {
+    expect(programFromActions([{ type: 'label', value: 'programa_ucab' }])).toBe('ucab')
+    expect(programFromActions([{ type: 'label', value: 'PROGRAMA_PROPEDEUTICO' }])).toBe('propedeutico')
+    expect(
+      programFromActions([
+        { type: 'registro', fields: { area: 'Propedéutico Medicina', producto: 'Propedéutico Medicina UCV' } },
+      ]),
+    ).toBe('propedeutico')
+    expect(programFromActions([{ type: 'label', value: 'area_definida' }])).toBeNull()
+  })
+
+  it('reads the program from a sale note', () => {
+    expect(programFromText('Guía UCAB')).toBe('ucab')
+    expect(programFromText('Propedéutico Medicina UCV')).toBe('propedeutico')
+    expect(programFromText('Paquete completo')).toBe('simadi')
+    expect(programFromText('')).toBeNull()
+  })
+
+  it('uses the named program, else the latest deal, else SIMADI', () => {
+    const programs = [SIMADI, UCAB, PROPE]
+    const deals = [
+      { id: 'a', stage_id: 'new', pipeline_id: 'pipe', updated_at: '2026-10-01T00:00:00Z' },
+      { id: 'b', stage_id: 'u-int', pipeline_id: 'pipe-ucab', updated_at: '2026-10-20T00:00:00Z' },
+    ]
+    expect(pickProgramPipeline(programs, 'propedeutico', deals)?.pipelineId).toBe('pipe-prope')
+    expect(pickProgramPipeline(programs, null, deals)?.pipelineId).toBe('pipe-ucab')
+    expect(pickProgramPipeline(programs, null, [])?.pipelineId).toBe('pipe')
+    // A program without a configured pipeline falls back the same way.
+    expect(pickProgramPipeline([SIMADI], 'ucab', [])?.pipelineId).toBe('pipe')
+  })
+
+  it("moves deals with each pipeline's own stages", () => {
+    expect(decideStageMove(UCAB, 'u-new', 'verify')).toBe('u-ver')
+    expect(decideStageMove(UCAB, 'u-lost', 'new')).toBe('u-new')
+    expect(decideStageMove(UCAB, 'int', 'verify')).toBeNull()
   })
 })
 
@@ -144,7 +198,7 @@ describe('closeWonDeal', () => {
   it('moves the existing deal to the won stage with its USD value and name', async () => {
     const { db, writes } = fakeDb({
       ai_pipeline_sync: { ...SYNC_ROW, stage_won_id: 'won' },
-      deals: [{ id: 'd1', notes: null }],
+      deals: [{ id: 'd1', stage_id: 'int', pipeline_id: 'pipe', notes: null }],
     })
     const res = await closeWonDeal(db, ARGS)
     expect(res).toEqual({ dealId: 'd1', stageId: 'won', created: false })

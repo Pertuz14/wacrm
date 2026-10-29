@@ -17,8 +17,10 @@
 //     "amount": 4845.86,            // required, what was charged
 //     "currency": "VES",            // USD | USDT | VES (default USD)
 //     "rate": 96.9,                 // optional Bs/USD; default: the stored BCV rate
-//     "note": "Paquete completo"    // optional, appended to the deal notes
-//   }
+//     "note": "Paquete completo",   // optional, appended to the deal notes
+//     "program": "ucab"             // optional: simadi | ucab | propedeutico
+//   }                               //   (default: read from the note, else the
+//                                   //   contact's latest deal, else SIMADI)
 //
 // Response (200):
 //   { "data": { "amount_usd", "rate", "rate_date", "contact_id",
@@ -32,7 +34,7 @@ import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation'
 import { SendMessageError } from '@/lib/whatsapp/send-message';
 import { resolveAuditUserId } from '@/lib/api/v1/contacts';
 import { loadPricing } from '@/lib/ai/exchange-rate';
-import { closeWonDeal } from '@/lib/ai/pipeline-sync';
+import { closeWonDeal, programFromText } from '@/lib/ai/pipeline-sync';
 
 const CURRENCIES = ['USD', 'USDT', 'VES'] as const;
 type Currency = (typeof CURRENCIES)[number];
@@ -106,6 +108,10 @@ export async function POST(request: Request) {
       title: name ?? phone,
       valueUsd: amountUsd,
       note,
+      // Which program's pipeline: an explicit "program", else read from the note.
+      program:
+        programFromText(typeof body.program === 'string' ? body.program : null) ??
+        programFromText(note),
     });
 
     return ok({

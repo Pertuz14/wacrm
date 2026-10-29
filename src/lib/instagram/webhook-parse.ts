@@ -7,6 +7,8 @@
 // read receipts); `changes` carries comments.
 // ============================================================
 
+import type { IgReferral } from '@/lib/leads/source'
+
 export interface IgAttachment {
   type: string
   payload?: { url?: string; title?: string; reel_video_id?: string }
@@ -25,7 +27,11 @@ export interface IgMessagingItem {
     is_unsupported?: boolean
     reply_to?: { mid?: string; story?: { url?: string; id?: string } }
     quick_reply?: { payload?: string }
+    /** Click-to-Instagram-Direct ad (some API versions put it here). */
+    referral?: IgReferral
   }
+  /** Click-to-Instagram-Direct ad that opened the thread. */
+  referral?: IgReferral
   reaction?: { mid?: string; action?: 'react' | 'unreact'; reaction?: string; emoji?: string }
   postback?: { mid?: string; title?: string; payload?: string }
   read?: { mid?: string }
@@ -67,6 +73,8 @@ export type IgEvent =
       storyReplyUrl: string | null
       quickReplyPayload: string | null
       isDeleted: boolean
+      /** Ad that opened the thread, when Meta sends one. */
+      referral: IgReferral | null
     }
   | { kind: 'reaction'; igAccountId: string; customerId: string; mid: string; emoji: string | null; removed: boolean }
   | { kind: 'postback'; igAccountId: string; customerId: string; mid: string; timestamp: number; title: string; payload: string }
@@ -155,6 +163,7 @@ export function parseInstagramWebhook(body: IgWebhookBody): IgEvent[] {
           storyReplyUrl: msg.reply_to?.story?.url ?? null,
           quickReplyPayload: msg.quick_reply?.payload ?? null,
           isDeleted: msg.is_deleted === true,
+          referral: msg.referral ?? m.referral ?? null,
         })
       } else if (m.reaction?.mid && senderId && senderId !== igAccountId) {
         events.push({

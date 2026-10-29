@@ -10,6 +10,7 @@ import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { notifyInboundMessage } from '@/lib/notifications/web-push'
 import { pickContactDisplayName } from '@/lib/notifications/browser-notify'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
+import { recordLeadSource } from '@/lib/leads/source'
 import {
   instagramVerifyTokens,
   instagramWebhookSecrets,
@@ -87,6 +88,7 @@ async function processEvents(events: IgEvent[]) {
           kind: 'message', igAccountId: ev.igAccountId, customerId: ev.customerId, isEcho: false, mid: ev.mid,
           timestamp: ev.timestamp, text: ev.title || ev.payload, contentType: 'text', mediaUrl: null,
           replyToMid: null, storyReplyUrl: null, quickReplyPayload: ev.payload, isDeleted: false,
+          referral: null,
         })
       } else if (ev.kind === 'reaction') await handleReaction(config, ev)
       else if (ev.kind === 'comment') await handleComment(config, ev)
@@ -277,6 +279,32 @@ async function handleMessage(config: InstagramConfig, ev: Extract<IgEvent, { kin
     contactName: pickContactDisplayName(contact) ?? (contact.ig_username ? `@${contact.ig_username}` : null),
     contentType: ev.contentType,
     contentText: text,
+  })
+
+  // Where this customer came from: an ad, one of our comment-to-DM
+  // replies, or a plain DM. Never throws.
+  let commentKeyword: string | null = null
+  if (isFirstInbound) {
+    const { data: reply } = await db()
+      .from('instagram_comment_replies')
+      .select('keyword')
+      .eq('account_id', config.accountId)
+      .eq('from_id', ev.customerId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    commentKeyword = (reply as { keyword: string | null } | null)?.keyword ?? null
+  }
+  await recordLeadSource(db(), {
+    accountId: config.accountId,
+    contactId: contact.id,
+    conversationId: conversation.id,
+    userId: config.userId,
+    channel: 'instagram',
+    isFirstInbound,
+    text,
+    igReferral: ev.referral,
+    commentKeyword,
   })
 
   // Automations (text steps reach Instagram; WhatsApp-only steps such as

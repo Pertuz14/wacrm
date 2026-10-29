@@ -21,6 +21,7 @@ import { type MetaReferral, unsupportedInboundText } from '@/lib/whatsapp/unsupp
 import { notifyInboundMessage } from '@/lib/notifications/web-push'
 import { pickContactDisplayName } from '@/lib/notifications/browser-notify'
 import { sweepStaleDeals } from '@/lib/ai/pipeline-sync'
+import { recordLeadSource } from '@/lib/leads/source'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -1023,6 +1024,19 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // Where this customer came from (ad, web link, TikTok…) — first message
+  // and any later one that carries an origin. Never throws.
+  await recordLeadSource(supabaseAdmin(), {
+    accountId,
+    contactId: contactRecord.id,
+    conversationId: conversation.id,
+    userId: configOwnerUserId,
+    channel: 'whatsapp',
+    isFirstInbound: isFirstInboundMessage,
+    text: message.text?.body ?? contentText,
+    waReferral: message.referral ?? null,
+  })
 
   // ============================================================
   // Flow runner dispatch.

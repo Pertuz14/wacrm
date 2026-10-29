@@ -10,10 +10,18 @@
  * read like gibberish to the model, which then handed the thread to a human.
  */
 
+/** `messages[].referral` of a Click-to-WhatsApp ad or post. */
 export interface MetaReferral {
+  /** 'ad' or 'post' */
   source_type?: string
+  /** The ad id (ads) or post id. */
+  source_id?: string
+  /** Link to the ad/post — tells Facebook from Instagram. */
+  source_url?: string
   headline?: string
   body?: string
+  /** Click id of the ad click (Conversions API). */
+  ctwa_clid?: string
 }
 
 const STORED_PREFIX = '[Mensaje que WhatsApp no deja ver aquí'
