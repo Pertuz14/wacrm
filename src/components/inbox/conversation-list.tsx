@@ -188,7 +188,12 @@ export function ConversationList({
       });
     }
 
-    return result;
+    // Newest activity first. The list is fetched in this order, but realtime
+    // events only patch rows in place — without this a chat that just got a
+    // message stayed where it was until the next refetch.
+    const at = (c: Conversation) =>
+      c.last_message_at ? Date.parse(c.last_message_at) || 0 : 0;
+    return [...result].sort((a, b) => at(b) - at(a));
   }, [conversations, filter, search, selectedTagIds, selectedCompany]);
 
   const toggleTag = useCallback((id: string) => {
