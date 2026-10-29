@@ -96,6 +96,17 @@ interface WhatsAppMessage {
   referral?: MetaReferral
 }
 
+/**
+ * A message the business sent from the WhatsApp Business app (coexistence).
+ * Same shape as an inbound message, except `from` is the business and the
+ * customer is `to` / `to_user_id`.
+ */
+interface WhatsAppEcho extends WhatsAppMessage {
+  to?: string
+  to_user_id?: string
+  to_parent_user_id?: string
+}
+
 /** One entry of a failed status's `errors` array, as Meta sends it. */
 interface MetaStatusError {
   code: number
@@ -122,6 +133,13 @@ interface WhatsAppWebhookEntry {
         parent_user_id?: string
       }>
       messages?: WhatsAppMessage[]
+      /**
+       * Coexistence (same number on the WhatsApp Business app and the
+       * Cloud API): messages the business sent from the app itself. Meta
+       * delivers them on `field: 'smb_message_echoes'`, and only when the
+       * Meta app is subscribed to that webhook field.
+       */
+      message_echoes?: WhatsAppEcho[]
       statuses?: Array<{
         id: string
         status: string
@@ -303,8 +321,14 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         }
       }
 
-      // Handle incoming messages
-      if (!value.messages || !value.contacts) continue
+      // Handle incoming messages, and echoes of what the business sent
+      // from the WhatsApp Business app (coexistence).
+      const inbound =
+        value.messages && value.contacts
+          ? { messages: value.messages, contacts: value.contacts }
+          : null
+      const echoes = value.message_echoes ?? []
+      if (!inbound && echoes.length === 0) continue
 
       const phoneNumberId = value.metadata.phone_number_id
 
@@ -347,9 +371,20 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
       const decryptedAccessToken = decrypt(config.access_token)
 
-      for (let i = 0; i < value.messages.length; i++) {
-        const message = value.messages[i]
-        const contact = value.contacts[i] || value.contacts[0]
+      if (echoes.length > 0) {
+        await processEchoes(
+          echoes,
+          config.account_id,
+          config.user_id,
+          decryptedAccessToken,
+          config.mirror_inbound_media !== false
+        )
+      }
+      if (!inbound) continue
+
+      for (let i = 0; i < inbound.messages.length; i++) {
+        const message = inbound.messages[i]
+        const contact = inbound.contacts[i] || inbound.contacts[0]
 
         await processMessage(
           message,
@@ -656,6 +691,129 @@ async function handleReaction(
   }
 }
 
+const ALLOWED_CONTENT_TYPES = new Set([
+  'text', 'image', 'document', 'audio', 'video',
+  'location', 'template', 'interactive',
+])
+
+/** Maps a Meta message type onto the messages.content_type CHECK list. */
+function storedContentType(type: string): string {
+  return ALLOWED_CONTENT_TYPES.has(type)
+    ? type
+    : type === 'sticker'
+      ? 'image'         // stickers are images
+      : type === 'button'
+        ? 'interactive' // template quick-reply tap (issue #478)
+        : 'text'        // reaction, unknown → text fallback
+}
+
+// Messages the CRM sends itself are stored right after Meta answers. Give
+// that insert a head start before storing an echo, so the same message is
+// never saved twice (Meta documents echoes only for app-sent messages, but
+// this keeps us safe if that ever changes).
+const ECHO_GRACE_MS = process.env.NODE_ENV === 'test' ? 0 : 3000
+
+/**
+ * Store what the business sent from the WhatsApp Business app (coexistence),
+ * so the inbox shows the whole chat and the AI reads it as context. These are
+ * the business's own words: no unread bump, no automations, no AI reply.
+ */
+async function processEchoes(
+  echoes: WhatsAppEcho[],
+  accountId: string,
+  configOwnerUserId: string,
+  accessToken: string,
+  mirrorMedia: boolean
+) {
+  if (ECHO_GRACE_MS > 0) await new Promise((r) => setTimeout(r, ECHO_GRACE_MS))
+  for (const echo of echoes) {
+    try {
+      await processEcho(echo, accountId, configOwnerUserId, accessToken, mirrorMedia)
+    } catch (error) {
+      console.error('[webhook] echo processing failed:', echo.id, error)
+    }
+  }
+}
+
+async function processEcho(
+  echo: WhatsAppEcho,
+  accountId: string,
+  configOwnerUserId: string,
+  accessToken: string,
+  mirrorMedia: boolean
+) {
+  // Reactions from the app are not messages; skip them.
+  if (!echo.id || echo.type === 'reaction') return
+
+  // The customer is the recipient of an echo.
+  const identity = resolveInboundIdentity({
+    from: echo.to,
+    from_user_id: echo.to_user_id,
+    from_parent_user_id: echo.to_parent_user_id,
+  })
+  if (!hasUsableIdentity(identity)) {
+    console.warn('[webhook] echo has no recipient phone or BSUID; skipping:', echo.id)
+    return
+  }
+
+  const contactOutcome = await findOrCreateContact(accountId, configOwnerUserId, identity)
+  if (!contactOutcome) return
+  const convResult = await findOrCreateConversation(
+    accountId,
+    configOwnerUserId,
+    contactOutcome.contact.id
+  )
+  if (!convResult) return
+  const conversation = convResult.conversation
+
+  // Already stored (the CRM sent it, or Meta replayed the delivery).
+  if (await lookupInternalIdByMetaId(echo.id, conversation.id)) return
+
+  const { contentText, mediaUrl, mediaType } = await parseMessageContent(
+    echo,
+    accessToken,
+    mirrorMedia ? { accountId } : null
+  )
+  const replyToInternalId = echo.context?.id
+    ? await lookupInternalIdByMetaId(echo.context.id, conversation.id)
+    : null
+
+  const { error: msgError } = await supabaseAdmin()
+    .from('messages')
+    .upsert(
+      {
+        conversation_id: conversation.id,
+        sender_type: 'agent',
+        content_type: storedContentType(echo.type),
+        content_text: contentText,
+        media_url: mediaUrl,
+        media_type: mediaType,
+        message_id: echo.id,
+        status: 'sent',
+        created_at: new Date(parseInt(echo.timestamp) * 1000).toISOString(),
+        reply_to_message_id: replyToInternalId,
+      },
+      { onConflict: 'conversation_id,message_id', ignoreDuplicates: true }
+    )
+  if (msgError) {
+    console.error('[webhook] echo insert failed:', msgError.message)
+    return
+  }
+
+  // Answering from the phone means the chat was read there.
+  const now = new Date().toISOString()
+  const { error: convError } = await supabaseAdmin()
+    .from('conversations')
+    .update({
+      last_message_text: contentText || `[${echo.type}]`,
+      last_message_at: now,
+      updated_at: now,
+      unread_count: 0,
+    })
+    .eq('id', conversation.id)
+  if (convError) console.error('[webhook] echo conversation update failed:', convError.message)
+}
+
 async function processMessage(
   message: WhatsAppMessage,
   contact: WaContactPayload | undefined,
@@ -758,17 +916,7 @@ async function processMessage(
   //   text, image, document, audio, video, location, template, interactive
   // Map incoming WhatsApp types that aren't in that list to the closest
   // allowed value so the INSERT doesn't fail with a constraint error.
-  const ALLOWED_CONTENT_TYPES = new Set([
-    'text', 'image', 'document', 'audio', 'video',
-    'location', 'template', 'interactive',
-  ])
-  const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
-    ? message.type
-    : message.type === 'sticker'
-      ? 'image'         // stickers are images
-      : message.type === 'button'
-        ? 'interactive' // template quick-reply tap (issue #478)
-        : 'text'        // reaction, unknown → text fallback
+  const contentType = storedContentType(message.type)
 
   // Determine whether this is the contact's very first inbound message
   // BEFORE we insert, so the count is accurate. Covers the case where

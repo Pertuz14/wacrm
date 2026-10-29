@@ -42,6 +42,8 @@ const h = vi.hoisted(() => ({
     broadcastRecipient: null as { id: string; status: string } | null,
     /** Patches applied to that broadcast_recipients row. */
     recipientUpdates: [] as Record<string, unknown>[],
+    /** Patches applied to a `conversations` row (echo handling). */
+    conversationUpdates: [] as Record<string, unknown>[],
   },
 }))
 
@@ -78,6 +80,10 @@ vi.mock('@supabase/supabase-js', () => ({
         case 'conversations':
           // findOrCreateConversation: select().eq().eq().order().limit()
           return {
+            update: (patch: Record<string, unknown>) => {
+              h.state.conversationUpdates.push(patch)
+              return { eq: () => Promise.resolve({ error: null }) }
+            },
             select: () => ({
               eq: () => ({
                 eq: () => ({
@@ -374,6 +380,7 @@ beforeEach(() => {
   h.state.automationCompleted = 0
   h.state.mirrorInboundMedia = true
   h.state.storageUploads = []
+  h.state.conversationUpdates = []
   h.state.storageUploadError = null
   h.state.contactByWaUserId = null
   h.state.contactInserts = []
@@ -1052,5 +1059,77 @@ describe('inbound webhook: automation waiting for a reply', () => {
     await runWebhook()
 
     expect(h.resumeAwaitingReply).not.toHaveBeenCalled()
+  })
+})
+
+// Coexistence: messages the business sent from the WhatsApp Business app
+// arrive as `smb_message_echoes` and must land in the inbox as agent
+// messages (so the AI sees them), without triggering anything.
+describe('smb_message_echoes', () => {
+  async function runEcho(echo: Record<string, unknown>) {
+    const body = {
+      entry: [
+        {
+          changes: [
+            {
+              field: 'smb_message_echoes',
+              value: {
+                metadata: { phone_number_id: 'pn-1' },
+                message_echoes: [echo],
+              },
+            },
+          ],
+        },
+      ],
+    }
+    await POST({
+      text: async () => JSON.stringify(body),
+      headers: { get: () => 'sha256=stub' },
+    } as unknown as Request)
+    for (const cb of h.state.afterCallbacks) await cb()
+  }
+
+  const ECHO = {
+    id: 'wamid.ECHO1',
+    from: '15559990000',
+    to: '15551230000',
+    timestamp: '1700000100',
+    type: 'text',
+    text: { body: 'Hola, le escribo de Rumbo a la U' },
+  }
+
+  it('stores the echo as an agent message on the customer conversation', async () => {
+    await runEcho(ECHO)
+
+    expect(mockFindExistingContact).toHaveBeenCalled()
+    expect(h.state.upsertCalls).toHaveLength(1)
+    expect(h.state.upsertCalls[0].row).toMatchObject({
+      conversation_id: 'conv-1',
+      sender_type: 'agent',
+      content_type: 'text',
+      content_text: 'Hola, le escribo de Rumbo a la U',
+      message_id: 'wamid.ECHO1',
+      status: 'sent',
+    })
+    expect(h.state.conversationUpdates[0]).toMatchObject({
+      last_message_text: 'Hola, le escribo de Rumbo a la U',
+      unread_count: 0,
+    })
+  })
+
+  it('does not run automations, flows, the AI reply or the unread bump', async () => {
+    await runEcho(ECHO)
+
+    expect(h.runAutomationsForTrigger).not.toHaveBeenCalled()
+    expect(h.dispatchInboundToFlows).not.toHaveBeenCalled()
+    expect(h.dispatchInboundToAiReply).not.toHaveBeenCalled()
+    expect(h.state.rpcCalls).toHaveLength(0)
+  })
+
+  it('skips an echo that is already stored (sent from the CRM)', async () => {
+    h.state.replyContextParent = { id: 'msg-existing' }
+    await runEcho(ECHO)
+
+    expect(h.state.upsertCalls).toHaveLength(0)
   })
 })
