@@ -204,6 +204,16 @@ ${await instagramChannelNote(db, accountId)}`
     const handoff = sentinelHandoff || Boolean(handoffAction)
     const target = { accountId, conversationId, contactId }
 
+    // The customer wrote again while this reply was being generated: drop
+    // it — the newer message's own dispatch answers with everything in
+    // view, so the customer doesn't get two answers in a row.
+    if (
+      inboundMessageId &&
+      (await hasNewerDispatchingInbound(db, conversationId, inboundMessageId))
+    ) {
+      return
+    }
+
     if (parts.length > 0) {
       // Atomically claim a reply slot: the cap check + increment happen in
       // one UPDATE, so concurrent inbounds can never overshoot the cap. If
@@ -263,16 +273,19 @@ ${await instagramChannelNote(db, accountId)}`
         messages: transcript,
         replyCount: conv.ai_reply_count ?? 0,
       })
-      const update: Record<string, unknown> = {
-        ai_autoreply_disabled: true,
-        ai_handoff_summary: summary,
-      }
+      await db
+        .from('conversations')
+        .update({ ai_autoreply_disabled: true, ai_handoff_summary: summary })
+        .eq('id', conversationId)
       // Only set the assignee when a target is configured AND the thread
       // isn't already owned — never stomp an existing human assignment.
-      if (config.handoffAgentId && !conv.assigned_agent_id) {
-        update.assigned_agent_id = config.handoffAgentId
+      if (config.handoffAgentId) {
+        await db
+          .from('conversations')
+          .update({ assigned_agent_id: config.handoffAgentId })
+          .eq('id', conversationId)
+          .is('assigned_agent_id', null)
       }
-      await db.from('conversations').update(update).eq('id', conversationId)
       await alertHandoff(db, target, handoffAction?.reason ?? null)
     }
   } catch (err) {
@@ -284,11 +297,47 @@ ${await instagramChannelNote(db, accountId)}`
 const MESSAGE_GAP_MS = 700
 
 /** Inbound content types that trigger their own auto-reply dispatch
- *  (see the webhook). A newer one of these supersedes an older dispatch. */
+ *  (see the webhook). A newer one of these supersedes an older dispatch;
+ *  anything else (a sticker, a reaction) never does, so it can't leave
+ *  the customer without an answer. */
 const DISPATCHING_CONTENT_TYPES = ['text', 'image', 'audio', 'video', 'document']
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * True when the customer sent a newer message that triggers its own
+ * auto-reply after `inboundMessageId`. Fails safe (false → reply anyway)
+ * on any lookup problem: a duplicate answer is better than none.
+ */
+async function hasNewerDispatchingInbound(
+  db: ReturnType<typeof supabaseAdmin>,
+  conversationId: string,
+  inboundMessageId: string,
+): Promise<boolean> {
+  try {
+    const { data: own } = await db
+      .from('messages')
+      .select('created_at')
+      .eq('conversation_id', conversationId)
+      .eq('message_id', inboundMessageId)
+      .limit(1)
+    const createdAt = (own as { created_at: string }[] | null)?.[0]?.created_at
+    if (!createdAt) return false
+    const { data: newer } = await db
+      .from('messages')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('sender_type', 'customer')
+      .in('content_type', DISPATCHING_CONTENT_TYPES)
+      .gt('created_at', createdAt)
+      .limit(1)
+    return Boolean(newer && newer.length > 0)
+  } catch (err) {
+    console.warn('[ai auto-reply] newer-inbound check failed (replying anyway):', err)
+    return false
+  }
 }
 
 /**
@@ -304,29 +353,8 @@ async function isLatestCustomerMessage(
 ): Promise<boolean> {
   const debounceMs = aiReplyDebounceMs()
   if (debounceMs <= 0) return true
-  try {
-    const { data: own } = await db
-      .from('messages')
-      .select('created_at')
-      .eq('conversation_id', conversationId)
-      .eq('message_id', inboundMessageId)
-      .limit(1)
-    const createdAt = (own as { created_at: string }[] | null)?.[0]?.created_at
-    await sleep(debounceMs)
-    if (!createdAt) return true
-    const { data: newer } = await db
-      .from('messages')
-      .select('id')
-      .eq('conversation_id', conversationId)
-      .eq('sender_type', 'customer')
-      .in('content_type', DISPATCHING_CONTENT_TYPES)
-      .gt('created_at', createdAt)
-      .limit(1)
-    return !(newer && newer.length > 0)
-  } catch (err) {
-    console.warn('[ai auto-reply] debounce check failed (replying anyway):', err)
-    return true
-  }
+  await sleep(debounceMs)
+  return !(await hasNewerDispatchingInbound(db, conversationId, inboundMessageId))
 }
 
 /**

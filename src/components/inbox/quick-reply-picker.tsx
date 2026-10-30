@@ -36,6 +36,7 @@ export function QuickReplyPicker({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: loads or resets state when its inputs change
     setLoading(true);
     void (async () => {
       try {

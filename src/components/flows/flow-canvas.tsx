@@ -355,6 +355,7 @@ function FlowCanvasInner() {
   const [rfNodes, setRfNodes] = useState<RfNode<NodeData>[]>(derivedRfNodes);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: loads or resets state when its inputs change
     setRfNodes(derivedRfNodes);
   }, [derivedRfNodes]);
 

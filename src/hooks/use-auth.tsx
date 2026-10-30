@@ -389,6 +389,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   }, []);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- manual memoization kept on purpose (stable callback identity)
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return;
     await fetchProfile(user.id);

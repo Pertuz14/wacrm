@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   closeWonDeal,
   decideStageMove,
@@ -8,6 +8,7 @@ import {
   programFromText,
   resolveWonStage,
   rowToSettings,
+  sweepStaleDeals,
   targetStageFromActions,
   type PipelineSyncSettings,
 } from './pipeline-sync'
@@ -220,5 +221,56 @@ describe('closeWonDeal', () => {
     const { db, writes } = fakeDb({ ai_pipeline_sync: SYNC_ROW, pipeline_stages: [{ id: 'new', name: 'Nuevo' }] })
     expect(await closeWonDeal(db, ARGS)).toBeNull()
     expect(writes).toHaveLength(0)
+  })
+})
+
+// ---- stale sweep ---------------------------------------------------------
+
+describe('sweepStaleDeals', () => {
+  function sweepDb(rpcResult: { data: unknown; error: unknown }, deals: unknown[] = []) {
+    const updates: { table: string; row: unknown }[] = []
+    const rpcCalls: string[] = []
+    const from = (table: string) => {
+      const q: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'order', 'limit', 'in', 'lt']) q[m] = () => q
+      q.maybeSingle = async () => ({ data: table === 'ai_pipeline_sync' ? SYNC_ROW : null, error: null })
+      q.then = (ok: (v: unknown) => unknown) => ok({ data: table === 'deals' ? deals : [], error: null })
+      q.update = (row: unknown) => {
+        updates.push({ table, row })
+        return q
+      }
+      return q
+    }
+    const rpc = async (name: string) => {
+      rpcCalls.push(name)
+      return rpcResult
+    }
+    return { db: { from, rpc } as unknown as Parameters<typeof sweepStaleDeals>[0], updates, rpcCalls }
+  }
+
+  it('moves stale cards with one database call', async () => {
+    const { db, rpcCalls, updates } = sweepDb({ data: 4, error: null })
+    expect(await sweepStaleDeals(db, 'acc', new Date('2026-10-30T12:00:00Z'))).toBe(4)
+    expect(rpcCalls).toEqual(['sweep_stale_deals'])
+    // Only the throttle stamp; no per-card updates from the app.
+    expect(updates.filter((u) => u.table === 'deals')).toHaveLength(0)
+  })
+
+  it('falls back to the per-card loop when the database function is missing', async () => {
+    const { db } = sweepDb({ data: null, error: { code: 'PGRST202' } }, [])
+    expect(await sweepStaleDeals(db, 'acc', new Date('2026-10-30T12:00:00Z'))).toBe(0)
+  })
+
+  it('does nothing while the hourly throttle is still fresh', async () => {
+    const recent = { ...SYNC_ROW, last_sweep_at: new Date().toISOString() }
+    const from = () => {
+      const q: Record<string, unknown> = {}
+      for (const m of ['select', 'eq']) q[m] = () => q
+      q.maybeSingle = async () => ({ data: recent, error: null })
+      return q
+    }
+    const rpc = vi.fn()
+    expect(await sweepStaleDeals({ from, rpc } as unknown as Parameters<typeof sweepStaleDeals>[0], 'acc')).toBe(0)
+    expect(rpc).not.toHaveBeenCalled()
   })
 })

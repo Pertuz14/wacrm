@@ -177,6 +177,7 @@ export function MembersTab() {
   }, [canManageMembers, t]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: loads or resets state when its inputs change
     void loadEverything();
   }, [loadEverything]);
 

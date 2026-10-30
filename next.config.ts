@@ -77,6 +77,8 @@ const nextConfig: NextConfig = {
   // Docker image can run without node_modules or the Next CLI.
   // Harmless outside Docker: `next start` keeps working as before.
   output: "standalone",
+  // Stop `next dev` from overwriting the repo's hand-written AGENTS.md.
+  agentRules: false,
 
   /**
    * Build workers. Next starts one per CPU it sees; on Hostinger's build
@@ -85,6 +87,8 @@ const nextConfig: NextConfig = {
    * is plenty for this app. Override with NEXT_BUILD_CPUS.
    */
   experimental: {
+    // Turbopack's PostCSS in worker threads (upstream fix for its panics).
+    turbopackPluginRuntimeStrategy: "workerThreads",
     cpus: Number(process.env.NEXT_BUILD_CPUS) || 2,
   },
 

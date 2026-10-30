@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Tag as TagIcon, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { fetchAccountTags } from '@/lib/settings/account-catalog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -78,14 +79,7 @@ export function TagManager() {
       setLoading(true);
       // By account, not by user: automatic tags are created under the
       // pipeline owner, and every member shares the account's tags.
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .eq('account_id', account)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setTags(data || []);
+      setTags(await fetchAccountTags(supabase, account));
     } catch (err) {
       console.error('Failed to fetch tags:', err);
       toast.error(t('failedToLoadTags'));

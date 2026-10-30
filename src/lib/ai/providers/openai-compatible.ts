@@ -102,6 +102,8 @@ interface OpenAiCompatibleResponse {
     prompt_tokens?: number
     completion_tokens?: number
     total_tokens?: number
+    /** OpenRouter: how many prompt tokens were read from the cache. */
+    prompt_tokens_details?: { cached_tokens?: number }
   }
 }
 
@@ -112,6 +114,52 @@ export function extractContentText(content: string | ContentPart[] | null | unde
   return content
     .map((part) => (part && typeof part.text === 'string' ? part.text : ''))
     .join('')
+}
+
+/**
+ * Prompt caching (OpenRouter + Claude only). The system prompt — fixed
+ * rules plus the business instructions, tens of thousands of tokens — is
+ * identical between replies for hours, so Anthropic can keep it cached:
+ * re-sent within ~5 minutes it is read at a fraction of the price and
+ * with less latency. The TEXT the model receives is byte-for-byte the
+ * same; only a `cache_control` marker is added. Everything else (other
+ * providers, other models) is sent exactly as before.
+ */
+export function wantsPromptCache(endpoint: string, model: string): boolean {
+  try {
+    const host = new URL(endpoint).hostname.toLowerCase()
+    return (host === 'openrouter.ai' || host.endsWith('.openrouter.ai')) && /^anthropic\//i.test(model)
+  } catch {
+    return false
+  }
+}
+
+/** Where per-question knowledge starts (see buildSystemPrompt): it changes every turn, so it stays out of the cached block. */
+const KNOWLEDGE_MARKER = '\n\nKnowledge base — '
+
+type SystemMessage =
+  | { role: 'system'; content: string }
+  | {
+      role: 'system'
+      content: { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }[]
+    }
+
+/**
+ * The system message, with the stable prefix marked cacheable when
+ * `cache` is on. The parts always concatenate back to `systemPrompt`.
+ */
+export function systemMessageFor(systemPrompt: string, cache: boolean): SystemMessage {
+  if (!cache) return { role: 'system', content: systemPrompt }
+  const cut = systemPrompt.indexOf(KNOWLEDGE_MARKER)
+  const stable = cut > 0 ? systemPrompt.slice(0, cut) : systemPrompt
+  const rest = cut > 0 ? systemPrompt.slice(cut) : ''
+  return {
+    role: 'system',
+    content: [
+      { type: 'text', text: stable, cache_control: { type: 'ephemeral' } },
+      ...(rest ? [{ type: 'text' as const, text: rest }] : []),
+    ],
+  }
 }
 
 export async function generateOpenAiCompatible(
@@ -136,9 +184,9 @@ export async function generateOpenAiCompatible(
     })
   }
 
-  let res: Response
-  try {
-    res = await fetch(endpoint, {
+  const conversation = mergeConsecutive(messages)
+  const send = (cache: boolean) =>
+    fetch(endpoint, {
       method: 'POST',
       redirect: 'manual',
       headers: {
@@ -147,11 +195,22 @@ export async function generateOpenAiCompatible(
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'system', content: systemPrompt }, ...mergeConsecutive(messages)],
+        messages: [systemMessageFor(systemPrompt, cache), ...conversation],
         max_tokens: COMPAT_MAX_OUTPUT_TOKENS,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
+
+  const cache = wantsPromptCache(endpoint, model)
+  let res: Response
+  try {
+    res = await send(cache)
+    // Never let caching cost a reply: if the provider rejects the cached
+    // request shape, send the exact pre-cache request once.
+    if (cache && (res.status === 400 || res.status === 422)) {
+      console.warn(`[ai] prompt cache request rejected (${res.status}); retrying without cache`)
+      res = await send(false)
+    }
   } catch (err) {
     throw toNetworkError(err)
   }
@@ -170,6 +229,12 @@ export async function generateOpenAiCompatible(
       t('ai.emptyResponse', { provider: `OpenAI-compatible provider${reason}` }),
       { code: 'empty_response' },
     )
+  }
+
+  if (cache) {
+    // Lets the owner check in the server logs that the cache is working.
+    const cached = data?.usage?.prompt_tokens_details?.cached_tokens ?? 0
+    console.info(`[ai] prompt tokens ${data?.usage?.prompt_tokens ?? '?'}, from cache ${cached}`)
   }
 
   return {

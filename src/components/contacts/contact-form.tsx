@@ -73,12 +73,14 @@ export function ContactForm({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: loads or resets state when its inputs change
       setName(contact?.name ?? '');
       setPhone(contact?.phone ?? '');
       setEmail(contact?.email ?? '');
       setCompany(contact?.company ?? '');
       setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
       setDupMatch(null);
+      // eslint-disable-next-line react-hooks/immutability -- fetchTags is a hoisted function declaration; it runs after render
       fetchTags();
     }
   }, [open, contact]);

@@ -45,6 +45,7 @@ export function DealsSettings() {
   // Keep the select in sync once the profile (and its account default)
   // resolves, and after a save round-trips through refreshProfile.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: loads or resets state when its inputs change
     setSelected(defaultCurrency);
   }, [defaultCurrency]);
 

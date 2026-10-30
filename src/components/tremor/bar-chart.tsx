@@ -184,6 +184,7 @@ const ScrollButton = ({ icon, onClick, disabled }: ScrollButtonProps) => {
   React.useEffect(() => {
     if (disabled) {
       clearInterval(intervalRef.current as NodeJS.Timeout)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: loads or resets state when its inputs change
       setIsPressed(false)
     }
   }, [disabled])

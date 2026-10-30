@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
     autoResponders: [] as { id: string }[],
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
+    updates: [] as { payload: Record<string, unknown>; isNull: string[] }[],
     rpcCalls: [] as { name: string; args: unknown }[],
     /** Debounce lookups: the inbound's own row, then newer messages. */
     ownMessage: [{ created_at: '2026-10-10T12:00:00Z' }] as { created_at: string }[],
@@ -95,8 +96,17 @@ vi.mock('./admin-client', () => ({
           }),
         }),
         update: (payload: Record<string, unknown>) => {
-          h.state.updatePayload = payload
-          return { eq: () => Promise.resolve({ error: null }) }
+          h.state.updatePayload = { ...h.state.updatePayload, ...payload }
+          const record = { payload, isNull: [] as string[] }
+          h.state.updates.push(record)
+          const result = Promise.resolve({ error: null })
+          const filter = Object.assign(result, {
+            is: (column: string) => {
+              record.isNull.push(column)
+              return result
+            },
+          })
+          return { eq: () => filter }
         },
       }
     },
@@ -155,7 +165,9 @@ beforeEach(() => {
   h.state.autoResponders = []
   h.state.claim = true
   h.state.updatePayload = null
+  h.state.updates = []
   h.state.rpcCalls = []
+  h.state.newerMessages = []
   h.loadAiConfig.mockResolvedValue(aiConfig())
   h.buildConversationContext.mockResolvedValue([{ role: 'user', content: 'hi' }])
   h.retrieveKnowledge.mockResolvedValue([])
@@ -204,6 +216,27 @@ describe('dispatchInboundToAiReply — eligibility gates', () => {
     // It still attempts the claim, but the send is skipped.
     expect(h.state.rpcCalls).toHaveLength(1)
     expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('skips when the slot claim is refused after a human takeover', async () => {
+    h.state.claim = false
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.generateReply).toHaveBeenCalledTimes(1)
+    expect(h.state.rpcCalls).toHaveLength(1)
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('leaves the reply to the newer run when another inbound arrived', async () => {
+    h.state.newerMessages = [{ id: 'msg-inbound-2' }]
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.state.rpcCalls).toHaveLength(0)
+    expect(h.engineSendText).not.toHaveBeenCalled()
+  })
+
+  it('replies when the triggering inbound is still the latest', async () => {
+    h.state.newerMessages = []
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalledTimes(1)
   })
 
   it('skips when AI is off / not configured', async () => {
@@ -456,5 +489,36 @@ describe('dispatchInboundToAiReply — multi-message replies and actions', () =>
     expect(h.engineSendText).toHaveBeenCalledTimes(1)
     // The thread is re-read after the pause so late messages are included.
     expect(h.buildConversationContext).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops the reply when the customer wrote again during generation', async () => {
+    // No debounce pause; the newer message lands while the model answers.
+    h.generateReply.mockImplementation(async () => {
+      h.state.newerMessages = [{ id: 'msg-newer' }]
+      return { text: 'Respuesta vieja', handoff: false }
+    })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    expect(h.state.rpcCalls).toHaveLength(0)
+  })
+
+  it('still replies when only a sticker arrived during generation', async () => {
+    // Stickers never trigger a dispatch, so the newer-message lookup only
+    // counts dispatching types — the mock returns none here.
+    h.generateReply.mockResolvedValue({ text: 'Hola', handoff: false })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalledTimes(1)
+  })
+
+  it('assigns the handoff agent only while the thread is still unassigned', async () => {
+    h.loadAiConfig.mockResolvedValue(aiConfig({ handoffAgentId: 'agent-7' }))
+    h.generateReply.mockResolvedValue({ text: '', handoff: true })
+    await dispatchInboundToAiReply(ARGS)
+    const pause = h.state.updates.find((u) => 'ai_autoreply_disabled' in u.payload)
+    const assign = h.state.updates.find((u) => 'assigned_agent_id' in u.payload)
+    expect(pause?.payload).not.toHaveProperty('assigned_agent_id')
+    expect(pause?.isNull).toEqual([])
+    expect(assign?.payload).toEqual({ assigned_agent_id: 'agent-7' })
+    expect(assign?.isNull).toEqual(['assigned_agent_id'])
   })
 })

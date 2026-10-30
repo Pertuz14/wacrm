@@ -235,6 +235,7 @@ export function WhatsAppConfig() {
     if (authLoading || profileLoading) return;
     if (!user || !accountId) {
       loadedAccountIdRef.current = null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: loads or resets state when its inputs change
       setLoading(false);
       return;
     }

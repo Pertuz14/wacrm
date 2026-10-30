@@ -400,6 +400,14 @@ export async function sweepStaleDeals(
       .update({ last_sweep_at: now.toISOString() })
       .eq('account_id', accountId)
 
+    // One statement in the database (migration 070). Falls back to the
+    // per-card loop below while that migration is not applied yet.
+    const { data: swept, error: sweepErr } = await db.rpc('sweep_stale_deals', {
+      p_account: accountId,
+      p_now: now.toISOString(),
+    })
+    if (!sweepErr) return typeof swept === 'number' ? swept : 0
+
     const programs = await loadProgramPipelines(db, accountId, settings)
     const lostByPipeline = new Map(programs.map((p) => [p.pipelineId!, p.stageLostId!]))
     const autoStages = programs.flatMap((p) => [p.stageNewId!, p.stageInterestedId!, p.stageVerifyId!])
