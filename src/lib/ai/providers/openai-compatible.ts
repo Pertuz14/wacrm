@@ -169,6 +169,26 @@ export function systemMessageFor(systemPrompt: string, cache: boolean): SystemMe
   }
 }
 
+type HistoryMessage = { role: string; content: string }
+
+/**
+ * Second cache point: the end of the conversation. The next turn of the
+ * same chat re-sends this exact history plus the new messages, so the
+ * provider reads the history from cache too (a long chat costs a fraction
+ * per turn). Same text; only the marker is added, and only when `cache`.
+ */
+export function withHistoryCache(
+  conversation: HistoryMessage[],
+  cache: boolean,
+): (HistoryMessage | { role: string; content: { type: 'text'; text: string; cache_control: { type: 'ephemeral' } }[] })[] {
+  const last = conversation[conversation.length - 1]
+  if (!cache || !last || typeof last.content !== 'string' || !last.content) return conversation
+  return [
+    ...conversation.slice(0, -1),
+    { role: last.role, content: [{ type: 'text', text: last.content, cache_control: { type: 'ephemeral' } }] },
+  ]
+}
+
 export async function generateOpenAiCompatible(
   args: ProviderArgs,
 ): Promise<ProviderResult> {
@@ -206,7 +226,10 @@ export async function generateOpenAiCompatible(
       },
       body: JSON.stringify({
         model,
-        messages: [systemMessageFor(systemPrompt, tuned && cache), ...conversation],
+        messages: [
+          systemMessageFor(systemPrompt, tuned && cache),
+          ...withHistoryCache(conversation, tuned && cache),
+        ],
         max_tokens: COMPAT_MAX_OUTPUT_TOKENS,
         ...(tuned ? { temperature: REPLY_TEMPERATURE } : {}),
       }),

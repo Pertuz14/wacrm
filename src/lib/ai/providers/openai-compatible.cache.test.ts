@@ -8,6 +8,7 @@ import {
   generateOpenAiCompatible,
   REPLY_TEMPERATURE,
   systemMessageFor,
+  withHistoryCache,
   wantsPromptCache,
 } from './openai-compatible'
 
@@ -91,7 +92,10 @@ describe('generateOpenAiCompatible with prompt caching', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
     expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' })
     expect(systemText(body)).toBe(args.systemPrompt)
-    expect(body.messages.slice(1)).toEqual([{ role: 'user', content: 'Hola' }])
+    // History: same text, with the second cache point on the last message.
+    expect(body.messages.slice(1)).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'Hola', cache_control: { type: 'ephemeral' } }] },
+    ])
   })
 
   it('falls back to the plain request when the cached one is rejected', async () => {
@@ -154,5 +158,27 @@ describe('consistent replies (low temperature)', () => {
     const retry = JSON.parse(String(fetchMock.mock.calls[1][1].body))
     expect(retry).not.toHaveProperty('temperature')
     expect(retry.messages[0]).toEqual({ role: 'system', content: 'Instrucciones' })
+  })
+})
+
+describe('withHistoryCache', () => {
+  const history = [
+    { role: 'user', content: 'Hola' },
+    { role: 'assistant', content: '¡Hola! ¿Para cuál prueba se prepara?' },
+    { role: 'user', content: 'SIMADI' },
+  ]
+
+  it('marks only the last message and keeps every text identical', () => {
+    const out = withHistoryCache(history, true)
+    expect(out.slice(0, 2)).toEqual(history.slice(0, 2))
+    expect(out[2]).toEqual({
+      role: 'user',
+      content: [{ type: 'text', text: 'SIMADI', cache_control: { type: 'ephemeral' } }],
+    })
+  })
+
+  it('leaves the history untouched without caching', () => {
+    expect(withHistoryCache(history, false)).toEqual(history)
+    expect(withHistoryCache([], true)).toEqual([])
   })
 })

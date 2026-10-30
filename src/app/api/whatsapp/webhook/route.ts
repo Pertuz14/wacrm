@@ -25,7 +25,6 @@ import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { type MetaReferral, unsupportedInboundText } from '@/lib/whatsapp/unsupported-message'
 import { notifyInboundMessage } from '@/lib/notifications/web-push'
 import { pickContactDisplayName } from '@/lib/notifications/browser-notify'
-import { sweepStaleDeals } from '@/lib/ai/pipeline-sync'
 import { recordLeadSource } from '@/lib/leads/source'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
@@ -1101,10 +1100,8 @@ async function processMessage(
     })
   }
 
-  // Move deals whose customer went silent to the "lost" stage. Piggybacks
-  // on inbound traffic instead of a cron; throttled to once an hour per
-  // account and a no-op unless pipeline sync is configured. Never throws.
-  await sweepStaleDeals(supabaseAdmin(), accountId)
+  // The 20-day move to the "lost" stage runs in the database every hour
+  // (pg_cron, migration 071) — no per-message sweep here any more.
 
   // message.received webhook (public API). Awaited — not fire-and-forget
   // — because we're inside the route's `after()` block, which only keeps
