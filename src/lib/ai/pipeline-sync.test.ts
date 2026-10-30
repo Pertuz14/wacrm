@@ -9,6 +9,7 @@ import {
   resolveWonStage,
   rowToSettings,
   sweepStaleDeals,
+  syncDealForTurn,
   targetStageFromActions,
   type PipelineSyncSettings,
 } from './pipeline-sync'
@@ -272,5 +273,52 @@ describe('sweepStaleDeals', () => {
     const rpc = vi.fn()
     expect(await sweepStaleDeals({ from, rpc } as unknown as Parameters<typeof sweepStaleDeals>[0], 'acc')).toBe(0)
     expect(rpc).not.toHaveBeenCalled()
+  })
+})
+
+describe('syncDealForTurn — greeting without a program', () => {
+  function turnDb(deals: unknown[]) {
+    const inserts: unknown[] = []
+    const from = (table: string) => {
+      const q: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'order', 'limit', 'in']) q[m] = () => q
+      q.maybeSingle = async () => ({
+        data: table === 'ai_pipeline_sync' ? SYNC_ROW : table === 'contacts' ? { name: 'Ana', phone: '58' } : null,
+        error: null,
+      })
+      q.then = (ok: (v: unknown) => unknown) => ok({ data: table === 'deals' ? deals : [], error: null })
+      q.insert = async (row: unknown) => {
+        inserts.push(row)
+        return { error: null }
+      }
+      q.update = () => q
+      return q
+    }
+    return { db: { from } as unknown as Parameters<typeof syncDealForTurn>[0], inserts }
+  }
+  const turn = (actions: Parameters<typeof syncDealForTurn>[1]['actions']) => ({
+    accountId: 'acc',
+    contactId: 'c1',
+    conversationId: 'conv',
+    configOwnerUserId: 'u1',
+    actions,
+  })
+
+  it('creates no card while the program is unknown (M18)', async () => {
+    const { db, inserts } = turnDb([])
+    await syncDealForTurn(db, turn([{ type: 'label', value: 'nuevo_interesado' }]))
+    expect(inserts).toHaveLength(0)
+  })
+
+  it('creates the card once the program is named', async () => {
+    const { db, inserts } = turnDb([])
+    await syncDealForTurn(db, turn([{ type: 'label', value: 'nuevo_interesado' }, { type: 'label', value: 'programa_simadi' }]))
+    expect(inserts).toHaveLength(1)
+  })
+
+  it('still files the card (SIMADI) when the chat advances without a program label', async () => {
+    const { db, inserts } = turnDb([])
+    await syncDealForTurn(db, turn([{ type: 'label', value: 'area_definida' }]))
+    expect(inserts).toMatchObject([{ pipeline_id: 'pipe', stage_id: 'int' }])
   })
 })

@@ -26,10 +26,21 @@ function initials(name?: string, fallback?: string) {
   return source.charAt(0).toUpperCase();
 }
 
+/** Whole days since the card last changed (its stage, value…). */
+export function daysSince(iso: string | null | undefined, now = Date.now()): number | null {
+  const at = iso ? Date.parse(iso) : NaN;
+  if (!Number.isFinite(at)) return null;
+  return Math.max(0, Math.floor((now - at) / 86_400_000));
+}
+
 export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
+  // The AI sync titles cards with the contact's name: don't print it twice.
+  const sameAsTitle =
+    contactLabel.trim().toLowerCase() === deal.title.trim().toLowerCase();
+  const idle = daysSince(deal.updated_at ?? deal.created_at);
 
   return (
     <button
@@ -41,7 +52,7 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         e.stopPropagation();
         onEdit(deal);
       }}
-      className={`group relative w-full cursor-pointer rounded-xl border border-border/50 bg-muted/70 pl-4 pr-3 py-3 text-left shadow-sm transition-all ${
+      className={`group relative w-full cursor-pointer rounded-xl border border-border/50 bg-muted/70 py-2.5 pl-4 pr-3 text-left shadow-sm transition-all ${
         isOverlay
           ? "shadow-xl"
           : "hover:-translate-y-0.5 hover:border-border hover:bg-muted hover:shadow-lg"
@@ -72,18 +83,28 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         )}
       </div>
 
-      {/* Contact row */}
-      <div className="mt-2 flex items-center gap-2">
+      {/* Contact row — only when it adds something to the title */}
+      {!sameAsTitle && (
+      <div className="mt-1.5 flex items-center gap-2">
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
           {initials(deal.contact?.name, deal.contact?.phone)}
         </span>
         <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
       </div>
+      )}
 
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-1.5 flex items-center justify-between gap-2">
         <span className="text-sm font-bold text-primary">
           {formatCurrency(deal.value, deal.currency)}
         </span>
+        {idle !== null && !deal.expected_close_date && (
+          <span
+            className="text-[11px] text-muted-foreground"
+            title={t("lastChange")}
+          >
+            {idle === 0 ? t("today") : t("daysAgo", { days: idle })}
+          </span>
+        )}
         {deal.expected_close_date && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />

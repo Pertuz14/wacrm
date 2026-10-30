@@ -17,7 +17,7 @@ import {
 import type { Deal, PipelineStage } from "@/types";
 import { DealCard } from "./deal-card";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
@@ -39,21 +39,39 @@ export function PipelineBoard({
 }: PipelineBoardProps) {
   const { defaultCurrency } = useAuth();
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const tBoard = useTranslations("Pipelines.board");
 
   const sortedStages = useMemo(
     () => [...stages].sort((a, b) => a.position - b.position),
     [stages],
   );
 
+  // Search by card title, contact name or phone (digits match with or
+  // without spaces / +58).
+  const visibleDeals = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return deals;
+    const digits = q.replace(/D/g, "");
+    return deals.filter((d) => {
+      const text = `${d.title} ${d.contact?.name ?? ""}`.toLowerCase();
+      if (text.includes(q)) return true;
+      return digits.length >= 3 && (d.contact?.phone ?? "").replace(/D/g, "").includes(digits);
+    });
+  }, [deals, search]);
+
   const dealsByStage = useMemo(() => {
     const map = new Map<string, Deal[]>();
     for (const stage of sortedStages) map.set(stage.id, []);
-    for (const deal of deals) {
+    for (const deal of visibleDeals) {
       const bucket = map.get(deal.stage_id);
       if (bucket) bucket.push(deal);
     }
+    // Most recent activity first in every column.
+    const at = (d: Deal) => Date.parse(d.updated_at ?? d.created_at) || 0;
+    for (const bucket of map.values()) bucket.sort((a, b) => at(b) - at(a));
     return map;
-  }, [sortedStages, deals]);
+  }, [sortedStages, visibleDeals]);
 
   const sensors = useSensors(
     // 5px activation distance avoids clicks being interpreted as drags.
@@ -103,6 +121,25 @@ export function PipelineBoard({
           natural layout. The board can still overflow horizontally on
           lg+ once a pipeline has many stages (columns keep a 260px
           min-width), so a thin scrollbar stays visible on desktop. */}
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-sm">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={tBoard("searchPlaceholder")}
+            aria-label={tBoard("searchPlaceholder")}
+            className="h-9 w-full rounded-lg border border-border bg-muted pl-8 pr-3 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        {search.trim() ? (
+          <span className="text-xs text-muted-foreground">
+            {tBoard("searchCount", { shown: visibleDeals.length, total: deals.length })}
+          </span>
+        ) : null}
+      </div>
+
       <div className="pipeline-scroll flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 lg:snap-none">
         {sortedStages.map((stage) => {
           const stageDeals = dealsByStage.get(stage.id) ?? [];
@@ -211,7 +248,7 @@ function StageColumn({
     // restore the flex-1 share-the-row behavior. The droppable ref is
     // on the inner messages region below — intentionally NOT here, so
     // a drag over the column header doesn't highlight the whole column.
-    <div className="flex w-[85vw] min-w-[260px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card/60 p-4 lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[260px] lg:shrink lg:snap-none">
+    <div className="flex max-h-[calc(100dvh-13rem)] min-h-[16rem] w-[85vw] min-w-[260px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card/60 p-4 lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[260px] lg:shrink lg:snap-none">
       {/* 3px colored top border — sits above the column's padding */}
       <div
         className="-mx-4 -mt-4 h-[3px] rounded-t-xl"
@@ -231,7 +268,7 @@ function StageColumn({
 
       <div
         ref={setNodeRef}
-        className={`mt-3 flex flex-1 flex-col gap-2 rounded-lg transition-all ${
+        className={`-mr-2 mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg pr-2 transition-all ${
           isOver
             ? "bg-primary/5 outline outline-2 outline-dashed outline-primary outline-offset-2"
             : ""

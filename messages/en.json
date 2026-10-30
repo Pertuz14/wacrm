@@ -796,12 +796,17 @@
     },
     "board": {
       "dropDealHere": "Drop a deal here",
-      "addDeal": "Add Deal"
+      "addDeal": "Add Deal",
+      "searchPlaceholder": "Search cards by name or phone",
+      "searchCount": "{shown} of {total} cards"
     },
     "card": {
       "noContact": "No contact",
       "won": "Won",
-      "lost": "Lost"
+      "lost": "Lost",
+      "today": "today",
+      "daysAgo": "{days}d ago",
+      "lastChange": "Last change to this card"
     },
     "form": {
       "editDeal": "Edit Deal",

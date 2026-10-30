@@ -6,6 +6,7 @@ vi.mock('@/lib/webhooks/ssrf', () => ({ isDeliverableUrl: async () => true }))
 import { buildSystemPrompt } from '../defaults'
 import {
   generateOpenAiCompatible,
+  REPLY_TEMPERATURE,
   systemMessageFor,
   wantsPromptCache,
 } from './openai-compatible'
@@ -120,5 +121,38 @@ describe('generateOpenAiCompatible with prompt caching', () => {
     vi.stubGlobal('fetch', fetchMock)
     await expect(generateOpenAiCompatible({ ...args, model: 'anthropic/claude-haiku-5.5' })).rejects.toBeTruthy()
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('consistent replies (low temperature)', () => {
+  const base = {
+    apiKey: 'k',
+    systemPrompt: 'Instrucciones',
+    messages: [{ role: 'user' as const, content: 'Holaa' }],
+    timeoutMs: 5000,
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'anthropic/claude-haiku-5.5',
+  }
+
+  it('asks for a low temperature', async () => {
+    const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => ok())
+    vi.stubGlobal('fetch', fetchMock)
+    await generateOpenAiCompatible(base)
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
+    expect(body.temperature).toBe(REPLY_TEMPERATURE)
+    expect(REPLY_TEMPERATURE).toBeLessThanOrEqual(0.3)
+  })
+
+  it('retries without temperature or cache when a model rejects them', async () => {
+    const fetchMock = vi
+      .fn<(url: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(new Response('{"error":"temperature not supported"}', { status: 400 }))
+      .mockResolvedValueOnce(ok('Hola'))
+    vi.stubGlobal('fetch', fetchMock)
+    const res = await generateOpenAiCompatible({ ...base, model: 'openai/o9' })
+    expect(res.text).toBe('Hola')
+    const retry = JSON.parse(String(fetchMock.mock.calls[1][1].body))
+    expect(retry).not.toHaveProperty('temperature')
+    expect(retry.messages[0]).toEqual({ role: 'system', content: 'Instrucciones' })
   })
 })

@@ -336,7 +336,14 @@ export async function syncDealForTurn(
       args.contactId,
       programs.map((p) => p.pipelineId!),
     )
-    const pipeline = pickProgramPipeline(programs, programFromActions(args.actions), deals)
+    const named = programFromActions(args.actions)
+    // A first greeting that doesn't say which test it is (the prompt's
+    // M18) creates no card yet: it would land in SIMADI by default. The
+    // card appears as soon as the program is named. If the conversation
+    // moves on (area, payment…) without any program label, SIMADI is
+    // still used so nobody is left without a card.
+    if (!named && deals.length === 0 && target === 'new') return
+    const pipeline = pickProgramPipeline(programs, named, deals)
     if (!pipeline) return
     const deal = newestIn(deals, pipeline.pipelineId!)
     const now = new Date().toISOString()

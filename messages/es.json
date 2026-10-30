@@ -796,12 +796,17 @@
     },
     "board": {
       "dropDealHere": "Suelta un negocio aquí",
-      "addDeal": "Agregar negocio"
+      "addDeal": "Agregar negocio",
+      "searchPlaceholder": "Buscar tarjeta por nombre o teléfono",
+      "searchCount": "{shown} de {total} tarjetas"
     },
     "card": {
       "noContact": "Sin contacto",
       "won": "Ganado",
-      "lost": "Perdido"
+      "lost": "Perdido",
+      "today": "hoy",
+      "daysAgo": "hace {days} d",
+      "lastChange": "Último cambio de la tarjeta"
     },
     "form": {
       "editDeal": "Editar negocio",

@@ -796,12 +796,17 @@
     },
     "board": {
       "dropDealHere": "여기에 딜을 놓으세요",
-      "addDeal": "딜 추가"
+      "addDeal": "딜 추가",
+      "searchPlaceholder": "이름 또는 전화번호로 카드 검색",
+      "searchCount": "카드 {total}개 중 {shown}개"
     },
     "card": {
       "noContact": "연락처 없음",
       "won": "성사",
-      "lost": "실패"
+      "lost": "실패",
+      "today": "오늘",
+      "daysAgo": "{days}일 전",
+      "lastChange": "카드 마지막 변경"
     },
     "form": {
       "editDeal": "딜 수정",

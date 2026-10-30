@@ -125,6 +125,13 @@ export function extractContentText(content: string | ContentPart[] | null | unde
  * same; only a `cache_control` marker is added. Everything else (other
  * providers, other models) is sent exactly as before.
  */
+/**
+ * Low temperature = consistent replies: the model copies the predefined
+ * messages instead of rephrasing them differently on each turn. Not 0, so
+ * free-form answers still read naturally.
+ */
+export const REPLY_TEMPERATURE = 0.2
+
 export function wantsPromptCache(endpoint: string, model: string): boolean {
   try {
     const host = new URL(endpoint).hostname.toLowerCase()
@@ -185,7 +192,11 @@ export async function generateOpenAiCompatible(
   }
 
   const conversation = mergeConsecutive(messages)
-  const send = (cache: boolean) =>
+  // `tuned`: the prompt-cache marker (Claude on OpenRouter) and a low
+  // temperature, so the bot sends the predefined messages the same way
+  // every time instead of rewording them. The plain request is the exact
+  // pre-tuning one, kept as the fallback.
+  const send = (tuned: boolean) =>
     fetch(endpoint, {
       method: 'POST',
       redirect: 'manual',
@@ -195,8 +206,9 @@ export async function generateOpenAiCompatible(
       },
       body: JSON.stringify({
         model,
-        messages: [systemMessageFor(systemPrompt, cache), ...conversation],
+        messages: [systemMessageFor(systemPrompt, tuned && cache), ...conversation],
         max_tokens: COMPAT_MAX_OUTPUT_TOKENS,
+        ...(tuned ? { temperature: REPLY_TEMPERATURE } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
@@ -204,11 +216,12 @@ export async function generateOpenAiCompatible(
   const cache = wantsPromptCache(endpoint, model)
   let res: Response
   try {
-    res = await send(cache)
-    // Never let caching cost a reply: if the provider rejects the cached
-    // request shape, send the exact pre-cache request once.
-    if (cache && (res.status === 400 || res.status === 422)) {
-      console.warn(`[ai] prompt cache request rejected (${res.status}); retrying without cache`)
+    res = await send(true)
+    // Never let the tuning cost a reply: if the provider rejects the
+    // request (a model that refuses `temperature` or the cache marker),
+    // send the exact plain request once.
+    if (res.status === 400 || res.status === 422) {
+      console.warn(`[ai] tuned request rejected (${res.status}); retrying the plain request`)
       res = await send(false)
     }
   } catch (err) {
