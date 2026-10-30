@@ -341,7 +341,18 @@
       "deals": "Deals",
       "noTags": "No tags",
       "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+      "addNotePlaceholder": "Add a note...",
+      "pipelines": "Pipelines",
+      "noCard": "— No card —",
+      "stageIn": "Stage in {pipeline}",
+      "stageUpdated": "Pipeline updated",
+      "stageFailed": "Could not change the stage",
+      "wonKept": "This card is already a sale: to remove it, delete it from Pipelines",
+      "noPipelines": "No pipelines yet",
+      "editTags": "Edit",
+      "doneEditing": "Done",
+      "manageTags": "Create or rename tags",
+      "tagFailed": "Could not change the tag"
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",

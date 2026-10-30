@@ -341,7 +341,18 @@
       "deals": "Negocios",
       "noTags": "Sin etiquetas",
       "noDeals": "Sin negocios",
-      "addNotePlaceholder": "Agregar una nota..."
+      "addNotePlaceholder": "Agregar una nota...",
+      "pipelines": "Pipelines",
+      "noCard": "— Sin tarjeta —",
+      "stageIn": "Etapa en {pipeline}",
+      "stageUpdated": "Pipeline actualizado",
+      "stageFailed": "No se pudo cambiar la etapa",
+      "wonKept": "Esta tarjeta ya es una venta: para quitarla, bórrala desde Pipelines",
+      "noPipelines": "Aún no hay pipelines",
+      "editTags": "Editar",
+      "doneEditing": "Listo",
+      "manageTags": "Crear o renombrar etiquetas",
+      "tagFailed": "No se pudo cambiar la etiqueta"
     },
     "aiBanner": {
       "pausedTitle": "El asistente de IA está en pausa aquí",

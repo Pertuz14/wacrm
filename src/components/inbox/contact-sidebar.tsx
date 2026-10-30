@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import type { Contact, Deal, ContactNote, Tag } from "@/types";
+import type { Contact, ContactNote, Tag } from "@/types";
+import Link from "next/link";
+import { toast } from "sonner";
 import {
   Phone,
   Mail,
@@ -15,7 +17,10 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  Pencil,
 } from "lucide-react";
+import { ContactPipelineStages } from "@/components/contacts/contact-pipeline-stages";
+import { addContactTag, deleteContactTag } from "@/lib/contacts/tag-api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
@@ -32,9 +37,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
   const { accountId } = useAuth();
   const [copied, setCopied] = useState(false);
-  const [deals, setDeals] = useState<Deal[]>([]);
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [editingTags, setEditingTags] = useState(false);
+  const [togglingTag, setTogglingTag] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
 
@@ -43,13 +50,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
     const supabase = createClient();
 
-    // Fetch deals, notes, and tags in parallel
-    const [dealsRes, notesRes, tagsRes] = await Promise.all([
-      supabase
-        .from("deals")
-        .select("*, stage:pipeline_stages(*)")
-        .eq("contact_id", contact.id)
-        .order("created_at", { ascending: false }),
+    // Fetch notes, the contact's tags and the account's tags in parallel
+    // (deals are shown by ContactPipelineStages).
+    const [notesRes, tagsRes, allTagsRes] = await Promise.all([
       supabase
         .from("contact_notes")
         .select("*")
@@ -59,10 +62,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         .from("contact_tags")
         .select("id, tag_id, tags(*)")
         .eq("contact_id", contact.id),
+      supabase.from("tags").select("*").eq("account_id", contact.account_id).order("name"),
     ]);
 
-    if (dealsRes.data) setDeals(dealsRes.data);
     if (notesRes.data) setNotes(notesRes.data);
+    if (allTagsRes.data) setAllTags(allTagsRes.data as Tag[]);
     if (tagsRes.data) {
       const mapped = tagsRes.data
         .filter((ct: Record<string, unknown>) => ct.tags)
@@ -93,6 +97,24 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     // React Compiler's inference agrees with the manual dep list —
     // fixes the `preserve-manual-memoization` lint error.
   }, [contact]);
+
+  const toggleTag = useCallback(
+    async (tagId: string, isOn: boolean) => {
+      if (!contact) return;
+      setTogglingTag(tagId);
+      try {
+        if (isOn) await deleteContactTag(contact.id, tagId);
+        else await addContactTag(contact.id, tagId);
+        await fetchContactData();
+      } catch (err) {
+        console.error("[sidebar] tag toggle failed:", err);
+        toast.error(tSidebar("tagFailed"));
+      } finally {
+        setTogglingTag(null);
+      }
+    },
+    [contact, fetchContactData, tSidebar],
+  );
 
   const handleAddNote = useCallback(async () => {
     if (!contact || !newNote.trim()) return;
@@ -187,74 +209,89 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           {/* Divider */}
           <div className="my-4 border-t border-border" />
 
-          {/* Tags */}
+          {/* Pipelines: where this contact's card sits, editable */}
           <div>
             <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <TagIcon className="h-3 w-3" />
-              {tSidebar("tags")}
+              <DollarSign className="h-3 w-3" />
+              {tSidebar("pipelines")}
             </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {tags.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">{tSidebar("noTags")}</p>
-              ) : (
-                tags.map((tag) => (
-                  <span
-                    key={tag.contact_tag_id}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{
-                      backgroundColor: `${tag.color}20`,
-                      color: tag.color,
-                    }}
-                  >
-                    {tag.name}
-                  </span>
-                ))
-              )}
+            <div className="mt-2">
+              <ContactPipelineStages contactId={contact.id} onChanged={fetchContactData} />
             </div>
           </div>
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />
 
-          {/* Active Deals */}
+          {/* Tags (stage tags are shown by the pipeline pickers above) */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <DollarSign className="h-3 w-3" />
-              {tSidebar("deals")}
+            <div className="flex items-center justify-between px-1">
+              <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <TagIcon className="h-3 w-3" />
+                {tSidebar("tags")}
+              </span>
+              <button
+                type="button"
+                onClick={() => setEditingTags((v) => !v)}
+                className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-xs text-primary hover:bg-muted"
+              >
+                {editingTags ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+                {editingTags ? tSidebar("doneEditing") : tSidebar("editTags")}
+              </button>
             </div>
-            <div className="mt-2 space-y-2">
-              {deals.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">{tSidebar("noDeals")}</p>
-              ) : (
-                deals.map((deal) => (
-                  <div
-                    key={deal.id}
-                    className="rounded-lg bg-muted px-3 py-2"
-                  >
-                    <p className="text-sm font-medium text-foreground">
-                      {deal.title}
-                    </p>
-                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        {deal.currency ?? "$"}
-                        {deal.value.toLocaleString()}
-                      </span>
-                      {deal.stage && (
-                        <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px]"
-                          style={{
-                            backgroundColor: `${deal.stage.color}20`,
-                            color: deal.stage.color,
-                          }}
-                        >
-                          {deal.stage.name}
-                        </span>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {editingTags ? (
+                allTags.filter((tag) => !tag.pipeline_stage_id).map((tag) => {
+                  const on = tags.some((x) => x.id === tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      aria-pressed={on}
+                      disabled={togglingTag === tag.id}
+                      onClick={() => toggleTag(tag.id, on)}
+                      className={cn(
+                        "min-h-7 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-opacity disabled:opacity-50",
+                        !on && "opacity-50 hover:opacity-80",
                       )}
-                    </div>
-                  </div>
-                ))
+                      style={{
+                        backgroundColor: `${tag.color}${on ? "30" : "10"}`,
+                        color: tag.color,
+                        border: `1px solid ${tag.color}${on ? "80" : "30"}`,
+                      }}
+                    >
+                      {on ? "✓ " : "+ "}
+                      {tag.name}
+                    </button>
+                  );
+                })
+              ) : tags.filter((tag) => !tag.pipeline_stage_id).length === 0 ? (
+                <p className="px-1 text-xs text-muted-foreground">{tSidebar("noTags")}</p>
+              ) : (
+                tags
+                  .filter((tag) => !tag.pipeline_stage_id)
+                  .map((tag) => (
+                    <span
+                      key={tag.contact_tag_id}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                      style={{
+                        backgroundColor: `${tag.color}20`,
+                        color: tag.color,
+                      }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))
               )}
             </div>
+            {editingTags ? (
+              <Link
+                href="/settings?tab=fields"
+                className="mt-2 inline-block px-1 text-xs text-primary underline-offset-2 hover:underline"
+              >
+                {tSidebar("manageTags")}
+              </Link>
+            ) : null}
           </div>
 
           {/* Divider */}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
+import { ContactPipelineStages } from '@/components/contacts/contact-pipeline-stages';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
@@ -184,6 +185,9 @@ export function ContactDetailView({
 
   useEffect(() => {
     if (open && contactId) {
+      // The fetchers set state after their Supabase calls resolve, not
+      // synchronously; same pattern as the inbox contact sidebar.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchContact();
       fetchTags();
       fetchNotes();
@@ -251,6 +255,9 @@ export function ContactDetailView({
         await addContactTag(contactId, tagId);
         setContactTagIds((prev) => [...prev, tagId]);
       }
+      // A stage tag moves the contact's card (migration 057), which also
+      // swaps the other stage tags of that pipeline: reload both.
+      await Promise.all([fetchTags(), fetchDeals()]);
       onUpdated();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('toastUpdateFailed'));
@@ -702,6 +709,18 @@ export function ContactDetailView({
 
               {/* Deals Tab */}
               <TabsContent value="deals" className="flex-1 overflow-y-auto px-4 py-3">
+                {contactId ? (
+                  <div className="mb-4 rounded-lg border border-border p-3">
+                    <ContactPipelineStages
+                      contactId={contactId}
+                      onChanged={() => {
+                        fetchDeals();
+                        fetchTags();
+                        onUpdated();
+                      }}
+                    />
+                  </div>
+                ) : null}
                 {loadingDeals ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="size-5 animate-spin text-primary" />

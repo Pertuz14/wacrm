@@ -341,7 +341,18 @@
       "deals": "딜",
       "noTags": "태그 없음",
       "noDeals": "딜 없음",
-      "addNotePlaceholder": "메모 추가..."
+      "addNotePlaceholder": "메모 추가...",
+      "pipelines": "파이프라인",
+      "noCard": "— 카드 없음 —",
+      "stageIn": "{pipeline} 단계",
+      "stageUpdated": "파이프라인이 업데이트되었습니다",
+      "stageFailed": "단계를 변경하지 못했습니다",
+      "wonKept": "이 카드는 이미 판매로 기록되었습니다. 제거하려면 파이프라인에서 삭제하세요",
+      "noPipelines": "아직 파이프라인이 없습니다",
+      "editTags": "편집",
+      "doneEditing": "완료",
+      "manageTags": "태그 만들기 또는 이름 바꾸기",
+      "tagFailed": "태그를 변경하지 못했습니다"
     },
     "aiBanner": {
       "pausedTitle": "이 대화에서 AI 어시스턴트가 일시 중지됨",
