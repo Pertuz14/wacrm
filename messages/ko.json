@@ -844,7 +844,16 @@
       "toastMarkedLost": "실패로 표시했습니다",
       "toastReopened": "딜이 재개되었습니다",
       "toastFailedDelete": "딜을 삭제하지 못했습니다",
-      "toastDeleted": "딜이 삭제되었습니다"
+      "toastDeleted": "딜이 삭제되었습니다",
+      "pickerAll": "전체",
+      "pickerNoCard": "이 파이프라인에 카드 없음",
+      "pickerInPipeline": "이미 이 파이프라인에 있음",
+      "pickerFilter": "연락처 필터",
+      "pickerRecent": "최근에 메시지를 보낸 연락처",
+      "pickerMembers": "이 파이프라인에 카드가 있는 연락처",
+      "pickerResults": "검색 결과",
+      "pickerEmpty": "일치하는 연락처가 없습니다",
+      "pickerAlreadyHere": "이 연락처는 이미 이 파이프라인에 카드가 있습니다({stage} 단계). 저장하면 카드가 두 개가 됩니다."
     },
     "settings": {
       "managePipeline": "파이프라인 관리",

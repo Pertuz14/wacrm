@@ -844,7 +844,16 @@
       "toastMarkedLost": "Marcado como perdido",
       "toastReopened": "Negocio reabierto",
       "toastFailedDelete": "Error al eliminar el negocio",
-      "toastDeleted": "Negocio eliminado"
+      "toastDeleted": "Negocio eliminado",
+      "pickerAll": "Todos",
+      "pickerNoCard": "Sin tarjeta aquí",
+      "pickerInPipeline": "Ya en este pipeline",
+      "pickerFilter": "Filtrar contactos",
+      "pickerRecent": "Escribieron hace poco",
+      "pickerMembers": "Contactos con tarjeta en este pipeline",
+      "pickerResults": "Resultados de la búsqueda",
+      "pickerEmpty": "No hay contactos que coincidan",
+      "pickerAlreadyHere": "Este contacto ya tiene una tarjeta en este pipeline (etapa {stage}). Si guardas, tendrá dos."
     },
     "settings": {
       "managePipeline": "Administrar pipeline",

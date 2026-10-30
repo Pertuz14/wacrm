@@ -844,7 +844,16 @@
       "toastMarkedLost": "Marked as lost",
       "toastReopened": "Deal reopened",
       "toastFailedDelete": "Failed to delete deal",
-      "toastDeleted": "Deal deleted"
+      "toastDeleted": "Deal deleted",
+      "pickerAll": "All",
+      "pickerNoCard": "No card here",
+      "pickerInPipeline": "Already in this pipeline",
+      "pickerFilter": "Filter contacts",
+      "pickerRecent": "Wrote recently",
+      "pickerMembers": "Contacts with a card in this pipeline",
+      "pickerResults": "Search results",
+      "pickerEmpty": "No matching contacts",
+      "pickerAlreadyHere": "This contact already has a card in this pipeline (stage {stage}). Saving will create a second one."
     },
     "settings": {
       "managePipeline": "Manage Pipeline",

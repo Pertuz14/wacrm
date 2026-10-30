@@ -1,15 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { CURRENCIES } from "@/lib/currency";
-import { contactSearchFilter } from "@/lib/contacts/search-filter";
-import {
-  CONTACT_PICKER_LIMIT,
-  withSelectedContact,
-} from "@/lib/contacts/contact-picker";
+import { DealContactPicker } from "@/components/pipelines/deal-contact-picker";
 import type {
   Contact,
   Conversation,
@@ -71,10 +67,7 @@ export function DealForm({
   const [expectedCloseDate, setExpectedCloseDate] = useState("");
   const [notes, setNotes] = useState("");
 
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [contactSearch, setContactSearch] = useState("");
   const [pickedContact, setPickedContact] = useState<Contact | null>(null);
-  const contactSearchSeq = useRef(0);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [linkedConversation, setLinkedConversation] =
     useState<Conversation | null>(null);
@@ -91,7 +84,6 @@ export function DealForm({
   useEffect(() => {
     if (!open) return;
     setConfirmDelete(false);
-    setContactSearch("");
     setPickedContact(deal?.contact ?? null);
     if (deal) {
       setTitle(deal.title);
@@ -130,31 +122,6 @@ export function DealForm({
       cancelled = true;
     };
   }, [open, supabase]);
-
-  useEffect(() => {
-    if (!open || !accountId) return;
-    const seq = ++contactSearchSeq.current;
-    const timer = setTimeout(async () => {
-      let query = supabase
-        .from("contacts")
-        .select("*")
-        .eq("account_id", accountId)
-        .order("name")
-        .limit(CONTACT_PICKER_LIMIT);
-      const filter = contactSearchFilter(contactSearch);
-      if (filter) query = query.or(filter);
-      const { data, error } = await query;
-      if (seq !== contactSearchSeq.current || error) return;
-      setContacts((data ?? []) as Contact[]);
-    }, contactSearch ? 250 : 0);
-    return () => clearTimeout(timer);
-  }, [open, accountId, contactSearch, supabase]);
-
-  const contactOptions = withSelectedContact(
-    contacts,
-    contacts.find((c) => c.id === contactId) ??
-      (pickedContact?.id === contactId ? pickedContact : null),
-  );
 
   // Fetch linked conversation for the selected contact (newest open one).
   // Clearing on no-selection is sync with prop state; the populated
@@ -302,29 +269,22 @@ export function DealForm({
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("contact")}</Label>
-              <Input
-                value={contactSearch}
-                onChange={(e) => setContactSearch(e.target.value)}
-                placeholder={t("searchContacts")}
-                className="border-border bg-muted text-foreground"
-              />
-              <select
+              <DealContactPicker
+                accountId={accountId}
+                pipelineId={pipelineId}
+                stages={stages}
                 value={contactId}
-                onChange={(e) => {
-                  setContactId(e.target.value);
-                  setPickedContact(
-                    contactOptions.find((c) => c.id === e.target.value) ?? null,
-                  );
+                selected={pickedContact}
+                isNewDeal={!deal}
+                onChange={(c) => {
+                  setContactId(c.id);
+                  setPickedContact(c);
+                  // A new card usually takes the person's name.
+                  if (!deal && !title.trim()) {
+                    setTitle(c.name || (c.phone ? `+${c.phone.replace(/^\+/, "")}` : ""));
+                  }
                 }}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-              >
-                <option value="">{t("selectContact")}</option>
-                {contactOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || c.phone}
-                  </option>
-                ))}
-              </select>
+              />
 
               {linkedConversation && (
                 <Link
