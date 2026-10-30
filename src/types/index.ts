@@ -136,6 +136,10 @@ export interface Tag {
   name: string;
   color: string;
   created_at: string;
+  /** Set on the automatic tag of a pipeline stage (migration 053). */
+  pipeline_stage_id?: string | null;
+  /** Set on the automatic "Origen: …" tag of a lead source (migration 056). */
+  lead_source?: string | null;
 }
 
 export interface ContactTag {

@@ -1542,7 +1542,22 @@
         "blue": "Azul",
         "violet": "Violeta",
         "pink": "Rosa"
-      }
+      },
+      "tagUpdated": "Etiqueta actualizada",
+      "failedToUpdateTag": "Error al actualizar la etiqueta",
+      "groupManual": "Tus etiquetas",
+      "groupStage": "Etapas del pipeline (automáticas)",
+      "groupStageHint": "Una por etapa. Cada contacto lleva la de la etapa donde está su tarjeta y cambia sola cuando la tarjeta se mueve.",
+      "groupOrigin": "Origen del cliente (automáticas)",
+      "groupOriginHint": "Se ponen solas según de dónde escribió la persona (anuncio, web, TikTok, Instagram…).",
+      "editAria": "Editar {name}",
+      "editTag": "Editar etiqueta",
+      "editStageHint": "Etiqueta automática de una etapa. Para cambiar su nombre de forma permanente, cambia el nombre de la etapa en Pipelines: la etiqueta lo sigue. El color sí lo puedes cambiar aquí.",
+      "editOriginHint": "Etiqueta automática de origen. Puedes cambiar su nombre y color: se seguirá poniendo sola con el nombre nuevo.",
+      "deleteAutoConfirm": "¿Eliminar la etiqueta \"{name}\"? Se quitará de todos los contactos, pero es automática: volverá a crearse la próxima vez que se use.",
+      "nameLabel": "Nombre",
+      "colorLabel": "Color",
+      "save": "Guardar"
     },
     "templates": {
       "title": "Plantillas de mensaje",

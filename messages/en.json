@@ -1542,7 +1542,22 @@
         "blue": "Blue",
         "violet": "Violet",
         "pink": "Pink"
-      }
+      },
+      "tagUpdated": "Tag updated",
+      "failedToUpdateTag": "Failed to update tag",
+      "groupManual": "Your tags",
+      "groupStage": "Pipeline stages (automatic)",
+      "groupStageHint": "One per stage. Each contact carries the tag of its deal's stage, and it changes by itself when the deal moves.",
+      "groupOrigin": "Customer origin (automatic)",
+      "groupOriginHint": "Added by themselves from where the person wrote from (ad, website, TikTok, Instagram…).",
+      "editAria": "Edit {name}",
+      "editTag": "Edit tag",
+      "editStageHint": "Automatic stage tag. To rename it for good, rename the stage in Pipelines — the tag follows. You can change its colour here.",
+      "editOriginHint": "Automatic origin tag. You can rename it and change its colour; it keeps being added under the new name.",
+      "deleteAutoConfirm": "Delete the tag \"{name}\"? It is removed from all contacts, but it is automatic: it will be created again the next time it is needed.",
+      "nameLabel": "Name",
+      "colorLabel": "Colour",
+      "save": "Save"
     },
     "templates": {
       "title": "Message templates",

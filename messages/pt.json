@@ -1542,7 +1542,22 @@
         "blue": "Azul",
         "violet": "Violeta",
         "pink": "Rosa"
-      }
+      },
+      "tagUpdated": "Tag atualizada",
+      "failedToUpdateTag": "Falha ao atualizar a tag",
+      "groupManual": "Suas tags",
+      "groupStage": "Etapas do pipeline (automáticas)",
+      "groupStageHint": "Uma por etapa. Cada contato leva a da etapa do seu negócio, e ela muda sozinha quando o negócio se move.",
+      "groupOrigin": "Origem do cliente (automáticas)",
+      "groupOriginHint": "Adicionadas sozinhas conforme de onde a pessoa escreveu (anúncio, site, TikTok, Instagram…).",
+      "editAria": "Editar {name}",
+      "editTag": "Editar tag",
+      "editStageHint": "Tag automática de etapa. Para renomeá-la de vez, renomeie a etapa em Pipelines — a tag acompanha. A cor você pode mudar aqui.",
+      "editOriginHint": "Tag automática de origem. Você pode renomeá-la e mudar a cor; ela continua sendo adicionada com o novo nome.",
+      "deleteAutoConfirm": "Excluir a tag \"{name}\"? Ela sai de todos os contatos, mas é automática: será criada de novo na próxima vez que for usada.",
+      "nameLabel": "Nome",
+      "colorLabel": "Cor",
+      "save": "Salvar"
     },
     "templates": {
       "title": "Modelos de mensagem",

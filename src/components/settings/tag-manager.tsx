@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Plus, Tag as TagIcon, X } from 'lucide-react';
+import { Loader2, Pencil, Plus, Tag as TagIcon, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -37,10 +37,16 @@ const PRESET_COLORS = [
   { name: 'pink', value: '#ec4899' },
 ];
 
+type TagKind = 'manual' | 'stage' | 'origin';
+
+const kindOf = (tag: Tag): TagKind =>
+  tag.pipeline_stage_id ? 'stage' : tag.lead_source ? 'origin' : 'manual';
+
 /**
- * Tags card — colour-coded contact labels. Creation is an inline row
- * (name + colour swatch + Add); deletion goes through a confirmation
- * dialog since it detaches the tag from every contact.
+ * Tags card — colour-coded contact labels, grouped into the owner's own
+ * tags and the automatic ones (one per pipeline stage, migration 053; one
+ * per lead origin, 055/056). Clicking a tag opens an editor for its name
+ * and colour, with delete; creation is an inline row.
  */
 export function TagManager() {
   const t = useTranslations('Settings.tagsAndFields');
@@ -49,30 +55,33 @@ export function TagManager() {
 
   const [loading, setLoading] = useState(true);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [tagToDelete, setTagToDelete] = useState<Tag | null>(null);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[3].value);
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    fetchTags(user.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id]);
+  // Editor
+  const [editing, setEditing] = useState<Tag | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState('');
+  const [updating, setUpdating] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  async function fetchTags(userId: string) {
+  useEffect(() => {
+    if (authLoading || !user || !accountId) return;
+    fetchTags(accountId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id, accountId]);
+
+  async function fetchTags(account: string) {
     try {
       setLoading(true);
+      // By account, not by user: automatic tags are created under the
+      // pipeline owner, and every member shares the account's tags.
       const { data, error } = await supabase
         .from('tags')
         .select('*')
-        .eq('user_id', userId)
+        .eq('account_id', account)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -112,7 +121,7 @@ export function TagManager() {
       toast.success(t('tagCreated'));
       setNewTagName('');
       setSelectedColor(PRESET_COLORS[3].value);
-      await fetchTags(user.id);
+      await fetchTags(accountId);
     } catch (err) {
       console.error('Create error:', err);
       toast.error(t('failedToCreateTag'));
@@ -121,27 +130,53 @@ export function TagManager() {
     }
   }
 
-  function confirmDelete(tag: Tag) {
-    setTagToDelete(tag);
-    setDeleteDialogOpen(true);
+  function openEditor(tag: Tag) {
+    setEditing(tag);
+    setEditName(tag.name);
+    setEditColor(tag.color);
+    setConfirmingDelete(false);
+  }
+
+  async function handleUpdate() {
+    if (!editing) return;
+    const name = editName.trim();
+    if (!name) {
+      toast.error(t('nameRequired'));
+      return;
+    }
+    try {
+      setUpdating(true);
+      const { error } = await supabase
+        .from('tags')
+        .update({ name, color: editColor })
+        .eq('id', editing.id);
+      if (error) throw error;
+      setTags((prev) => prev.map((x) => (x.id === editing.id ? { ...x, name, color: editColor } : x)));
+      toast.success(t('tagUpdated'));
+      setEditing(null);
+    } catch (err) {
+      console.error('Update error:', err);
+      toast.error(t('failedToUpdateTag'));
+    } finally {
+      setUpdating(false);
+    }
   }
 
   async function handleDelete() {
-    if (!tagToDelete) return;
+    if (!editing) return;
 
     try {
       setDeleting(true);
       const { error } = await supabase
         .from('tags')
         .delete()
-        .eq('id', tagToDelete.id);
+        .eq('id', editing.id);
 
       if (error) throw error;
 
       toast.success(t('tagDeleted'));
-      setTags((prev) => prev.filter((t) => t.id !== tagToDelete.id));
-      setDeleteDialogOpen(false);
-      setTagToDelete(null);
+      setTags((prev) => prev.filter((x) => x.id !== editing.id));
+      setEditing(null);
     } catch (err) {
       console.error('Delete error:', err);
       toast.error(t('failedToDeleteTag'));
@@ -149,6 +184,36 @@ export function TagManager() {
       setDeleting(false);
     }
   }
+
+  const groups: { kind: TagKind; title: string; hint: string | null }[] = [
+    { kind: 'manual', title: t('groupManual'), hint: null },
+    { kind: 'stage', title: t('groupStage'), hint: t('groupStageHint') },
+    { kind: 'origin', title: t('groupOrigin'), hint: t('groupOriginHint') },
+  ];
+
+  function colorButtons(current: string, onPick: (v: string) => void) {
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {PRESET_COLORS.map((color) => (
+          <button
+            key={color.value}
+            type="button"
+            onClick={() => onPick(color.value)}
+            aria-label={t('useColor', { color: t(`colors.${color.name}` as Parameters<typeof t>[0]) })}
+            aria-pressed={current === color.value}
+            className={cn(
+              'size-6 rounded-md transition-transform hover:scale-110',
+              current === color.value && 'outline outline-2 outline-offset-2 outline-primary',
+            )}
+            style={{ backgroundColor: color.value }}
+            title={t(`colors.${color.name}` as Parameters<typeof t>[0])}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const editingKind = editing ? kindOf(editing) : 'manual';
 
   return (
     <Card>
@@ -161,49 +226,53 @@ export function TagManager() {
           {t('tagsDesc')}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {loading ? (
+      <CardContent className="space-y-5">
+        {/* Signed out / no account yet: nothing to load, show the empty state. */}
+        {loading && (authLoading || (user && accountId)) ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="size-6 animate-spin text-primary" />
           </div>
         ) : (
           <>
-            {tags.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="group inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
-                    style={{
-                      backgroundColor: `${tag.color}20`,
-                      color: tag.color,
-                      border: `1px solid ${tag.color}40`,
-                    }}
-                  >
-                    <span
-                      className="size-2 rounded-full"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    {tag.name}
-                    <button
-                      type="button"
-                      onClick={() => confirmDelete(tag)}
-                      aria-label={t('deleteAria', { name: tag.name })}
-                      className="ml-0.5 rounded-full p-0.5 opacity-60 transition-opacity hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
+            {tags.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('noTags')}</p>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {t('noTags')}
-              </p>
+              groups.map(({ kind, title, hint }) => {
+                const list = tags.filter((tag) => kindOf(tag) === kind);
+                if (list.length === 0) return null;
+                return (
+                  <section key={kind} className="space-y-2">
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground">{title}</h3>
+                      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {list.map((tag) => (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => openEditor(tag)}
+                          aria-label={t('editAria', { name: tag.name })}
+                          className="group inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:brightness-95"
+                          style={{
+                            backgroundColor: `${tag.color}20`,
+                            color: tag.color,
+                            border: `1px solid ${tag.color}40`,
+                          }}
+                        >
+                          <span className="size-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                          {tag.name}
+                          <Pencil className="size-3 opacity-50 transition-opacity group-hover:opacity-100" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })
             )}
 
             {/* Inline create row */}
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5 border-t pt-4">
               <Input
                 placeholder={t('placeholder')}
                 value={newTagName}
@@ -215,35 +284,14 @@ export function TagManager() {
                 maxLength={40}
                 className="min-w-[180px] flex-1"
               />
-              <div className="flex gap-1.5">
-                {PRESET_COLORS.map((color) => (
-                  <button
-                    key={color.value}
-                    type="button"
-                    onClick={() => setSelectedColor(color.value)}
-                    aria-label={t('useColor', { color: t(`colors.${color.name}` as Parameters<typeof t>[0]) })}
-                    aria-pressed={selectedColor === color.value}
-                    className={cn(
-                      'size-6 rounded-md transition-transform hover:scale-110',
-                      selectedColor === color.value &&
-                        'outline outline-2 outline-offset-2 outline-primary',
-                    )}
-                    style={{ backgroundColor: color.value }}
-                    title={t(`colors.${color.name}` as Parameters<typeof t>[0])}
-                  />
-                ))}
-              </div>
+              {colorButtons(selectedColor, setSelectedColor)}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleCreate}
                 disabled={saving || !newTagName.trim()}
               >
-                {saving ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Plus className="size-4" />
-                )}
+                {saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                 {t('addTag')}
               </Button>
             </div>
@@ -251,37 +299,82 @@ export function TagManager() {
         )}
       </CardContent>
 
-      {/* Delete confirmation */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
+      {/* Editor */}
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('deleteTag')}</DialogTitle>
+            <DialogTitle>{confirmingDelete ? t('deleteTag') : t('editTag')}</DialogTitle>
             <DialogDescription>
-              {tagToDelete ? t('deleteConfirm', { name: tagToDelete.name }) : null}
+              {confirmingDelete && editing
+                ? editingKind === 'manual'
+                  ? t('deleteConfirm', { name: editing.name })
+                  : t('deleteAutoConfirm', { name: editing.name })
+                : editingKind === 'stage'
+                  ? t('editStageHint')
+                  : editingKind === 'origin'
+                    ? t('editOriginHint')
+                    : null}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setDeleteDialogOpen(false)}
-              disabled={deleting}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  {t('deleting')}
-                </>
-              ) : (
-                t('deleteTag')
-              )}
-            </Button>
+
+          {!confirmingDelete ? (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label htmlFor="tag-edit-name" className="text-sm font-medium">
+                  {t('nameLabel')}
+                </label>
+                <Input
+                  id="tag-edit-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleUpdate();
+                  }}
+                  maxLength={60}
+                  disabled={updating}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <span className="text-sm font-medium">{t('colorLabel')}</span>
+                {colorButtons(editColor, setEditColor)}
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            {confirmingDelete ? (
+              <>
+                <Button variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+                  {t('cancel')}
+                </Button>
+                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                  {deleting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      {t('deleting')}
+                    </>
+                  ) : (
+                    t('deleteTag')
+                  )}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setConfirmingDelete(true)}
+                  disabled={updating}
+                >
+                  <Trash2 className="size-4" />
+                  {t('deleteTag')}
+                </Button>
+                <Button onClick={handleUpdate} disabled={updating || !editName.trim()}>
+                  {updating ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {t('save')}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
