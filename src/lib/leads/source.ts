@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MetaReferral } from '@/lib/whatsapp/unsupported-message'
+import { readSchoolRef, schoolRefNote, stripSchoolRef } from './school-ref'
 
 // ============================================================
 // Where a customer came from (migration 055, table lead_sources).
@@ -125,7 +126,8 @@ const MARKERS: [RegExp, LeadSource][] = [
  * The detail is what the person asked for (the text without the marker).
  */
 export function classifyMessageMarker(text: string | null | undefined): ClassifiedSource | null {
-  const raw = (text ?? '').trim()
+  // The allied-school mark (zero-width characters) sits after "(vi la web)": drop it first
+  const raw = (stripSchoolRef(text) ?? '').trim()
   if (!raw) return null
   const match = raw.match(/\(\s*vi\s+([^()]{2,40}?)\s*\)\s*[.!]*\s*$/i)
   if (match) {
@@ -175,11 +177,41 @@ export function originNote(c: ClassifiedSource): string {
   return parts.join(' ')
 }
 
+/**
+ * Allied-school link: when a message carries the invisible mark, leave a
+ * contact note once ("🏫 Llegó por el enlace de un colegio aliado"). The bot
+ * reads the code from the conversation itself (see conversationSchoolRef).
+ */
+async function recordSchoolRef(db: SupabaseClient, args: RecordLeadSourceArgs): Promise<void> {
+  try {
+    if (args.channel !== 'whatsapp') return
+    const code = readSchoolRef(args.text)
+    if (!code) return
+    const note = schoolRefNote(code)
+    const { data: existing } = await db
+      .from('contact_notes')
+      .select('id')
+      .eq('contact_id', args.contactId)
+      .eq('note_text', note)
+      .limit(1)
+    if ((existing ?? []).length) return
+    await db.from('contact_notes').insert({
+      account_id: args.accountId,
+      contact_id: args.contactId,
+      user_id: args.userId,
+      note_text: note,
+    })
+  } catch (err) {
+    console.error('[school ref] failed:', err)
+  }
+}
+
 /** Same origin again within this window is not a new arrival. */
 const REPEAT_WINDOW_MS = 12 * 60 * 60 * 1000
 
 /** Classify an inbound message and store its origin. Never throws. */
 export async function recordLeadSource(db: SupabaseClient, args: RecordLeadSourceArgs): Promise<void> {
+  await recordSchoolRef(db, args)
   try {
     const found = classifyInbound(args)
     if (!found) return
@@ -213,7 +245,7 @@ export async function recordLeadSource(db: SupabaseClient, args: RecordLeadSourc
       ad_id: found.adId,
       source_url: found.sourceUrl,
       click_id: found.clickId,
-      first_message: clean(args.text, 500),
+      first_message: clean(stripSchoolRef(args.text), 500),
       is_first_touch: !last,
     })
     if (error) {

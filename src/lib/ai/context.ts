@@ -5,6 +5,7 @@ import {
   isUnsupportedInboundText,
   unsupportedInboundForModel,
 } from '@/lib/whatsapp/unsupported-message'
+import { stripSchoolRef } from '@/lib/leads/school-ref'
 
 interface DbMessage {
   sender_type: 'customer' | 'agent' | 'bot'
@@ -35,7 +36,8 @@ export const CUSTOMER_IMAGE_PLACEHOLDER = '[The customer sent an image]'
 
 /** Text the model sees for one stored message; null to skip it. */
 export function renderMessageForModel(m: DbMessage): string | null {
-  const text = m.content_text?.trim() ?? ''
+  // The allied-school mark is invisible to people; the model never sees it either
+  const text = stripSchoolRef(m.content_text)?.trim() ?? ''
   // A message WhatsApp wouldn't hand us (often the first one from an ad):
   // explain it instead of passing the raw placeholder.
   if (m.sender_type === 'customer' && isUnsupportedInboundText(text)) {

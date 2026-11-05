@@ -1,6 +1,7 @@
 import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
+import { conversationSchoolRef, schoolRefContext } from '@/lib/leads/school-ref'
 import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
 import { aiReplyDebounceMs, buildSystemPrompt } from './defaults'
@@ -170,12 +171,19 @@ export async function dispatchInboundToAiReply(
     )
     // Instagram threads: tell the model which channel it is answering on
     // (editable per account in Settings → Instagram).
+    // Allied-school link (WhatsApp only): an internal line so the bot asks
+    // year and section only to these customers, when they fill in the REGISTRO.
+    const schoolRef = conv.channel === 'instagram' ? null : await conversationSchoolRef(db, conversationId)
     const systemPrompt =
       conv.channel === 'instagram'
         ? `${basePrompt}
 
 ${await instagramChannelNote(db, accountId)}`
-        : basePrompt
+        : schoolRef
+          ? `${basePrompt}
+
+${schoolRefContext(schoolRef)}`
+          : basePrompt
 
     const { text, handoff: sentinelHandoff, usage } = await generateReply({
       config,
