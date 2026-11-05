@@ -92,6 +92,7 @@ describe('programs', () => {
   it('reads the program from the bot labels and the REGISTRO', () => {
     expect(programFromActions([{ type: 'label', value: 'programa_ucab' }])).toBe('ucab')
     expect(programFromActions([{ type: 'label', value: 'PROGRAMA_PROPEDEUTICO' }])).toBe('propedeutico')
+    expect(programFromActions([{ type: 'label', value: 'programa_colegio' }])).toBe('colegio')
     expect(
       programFromActions([
         { type: 'registro', fields: { area: 'Propedéutico Medicina', producto: 'Propedéutico Medicina UCV' } },

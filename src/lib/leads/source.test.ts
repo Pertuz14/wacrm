@@ -49,6 +49,15 @@ describe('classifyMessageMarker', () => {
     expect(classifyMessageMarker('Los vi en tiktok y quiero info')?.source).toBe('tiktok')
   })
 
+  it('tells a school asking for the diagnostic from a student who saw the web', () => {
+    expect(classifyMessageMarker('Hola, escribo de un colegio y quiero información sobre el diagnóstico para 5.º año (vi la web)')).toMatchObject({
+      source: 'colegio',
+      detail: 'Hola, escribo de un colegio y quiero información sobre el diagnóstico para 5.º año',
+    })
+    // A student who only mentions their school stays a web lead
+    expect(classifyMessageMarker('Hola, quiero el paquete completo, soy del colegio San José (vi la web)')?.source).toBe('web')
+  })
+
   it('ignores normal messages', () => {
     expect(classifyMessageMarker('Hola, quiero información')).toBeNull()
     expect(classifyMessageMarker('')).toBeNull()

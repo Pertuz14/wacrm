@@ -22,6 +22,7 @@ export type LeadSource =
   | 'anuncio_meta'
   | 'publicacion'
   | 'web'
+  | 'colegio'
   | 'tiktok'
   | 'instagram'
   | 'comentario_instagram'
@@ -38,6 +39,7 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   anuncio_meta: 'Anuncio de Meta',
   publicacion: 'Publicación de Facebook o Instagram',
   web: 'Página web',
+  colegio: 'Colegio (diagnóstico)',
   tiktok: 'TikTok',
   instagram: 'Instagram',
   comentario_instagram: 'Comentario en Instagram',
@@ -111,6 +113,12 @@ export function classifyInstagramReferral(referral: IgReferral | null | undefine
   return result('anuncio_instagram', clean(referral.ads_context_data?.ad_title), { adId: referral.ad_id ?? null })
 }
 
+/**
+ * A school asking for the diagnostic from rumbouni.com/colegios: «Hola, escribo de un colegio y quiero
+ * información sobre el diagnóstico para 5.º año (vi la web)». It is not a student lead (migration 074).
+ */
+const SCHOOL_ASK = /\bescribo de(sde)? (un|el) colegio\b|\bdiagnostico para (5|quinto|colegios)\b/
+
 /** Known "(vi X)" names → origin. */
 const MARKERS: [RegExp, LeadSource][] = [
   [/^(la )?(web|pagina( web)?|sitio( web)?|rumbouni(\.com)?)$/, 'web'],
@@ -133,7 +141,11 @@ export function classifyMessageMarker(text: string | null | undefined): Classifi
   if (match) {
     const name = normalize(match[1]).trim()
     const asked = clean(raw.slice(0, match.index), 120)
-    for (const [re, source] of MARKERS) if (re.test(name)) return result(source, asked)
+    for (const [re, source] of MARKERS) {
+      if (!re.test(name)) continue
+      if (source === 'web' && SCHOOL_ASK.test(normalize(asked ?? ''))) return result('colegio', asked)
+      return result(source, asked)
+    }
     return result('otro', clean(match[1], 60))
   }
   if (/\btik ?tok\b/.test(normalize(raw))) return result('tiktok', clean(raw, 120))

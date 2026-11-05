@@ -34,13 +34,15 @@ const LABEL_STAGE: Record<string, AutoStage> = {
  * the main one (ai_pipeline_sync); the others live in ai_pipeline_programs
  * (migration 054).
  */
-export type Program = 'simadi' | 'ucab' | 'propedeutico'
+export type Program = 'simadi' | 'ucab' | 'propedeutico' | 'colegio'
 
 /** Prompt label → program the conversation is about. */
 const LABEL_PROGRAM: Record<string, Program> = {
   programa_simadi: 'simadi',
   programa_ucab: 'ucab',
   programa_propedeutico: 'propedeutico',
+  // Schools asking for the diagnostic (migration 074): their own «Colegios» pipeline
+  programa_colegio: 'colegio',
 }
 
 /** How often the stale-deal sweep may run per account. */
