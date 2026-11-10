@@ -1,5 +1,6 @@
 // ============================================================
-// DELETE /api/contacts/[id] — owner only.
+// DELETE /api/contacts/[id] — agent+ (same as the RLS delete policies of
+// contacts and deals). The inbox shows the button to the owner only.
 //
 // Deletes a contact together with its conversations and messages
 // (ON DELETE CASCADE from contacts → conversations → messages) and its
@@ -23,9 +24,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const ctx = await requireRole('owner');
+    const ctx = await requireRole('agent');
 
-    const limit = checkRateLimit(`owner:deleteContact:${ctx.userId}`, RATE_LIMITS.adminAction);
+    const limit = checkRateLimit(`deleteContact:${ctx.userId}`, RATE_LIMITS.adminAction);
     if (!limit.success) return rateLimitResponse(limit);
 
     const { id } = await params;

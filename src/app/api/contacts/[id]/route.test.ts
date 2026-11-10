@@ -52,11 +52,11 @@ beforeEach(() => {
 });
 
 describe('DELETE /api/contacts/[id]', () => {
-  it('is owner only', async () => {
+  it('needs an agent or above', async () => {
     mocks.requireRole.mockRejectedValue(new Error('forbidden'));
     const res = await DELETE(req(), params());
     expect(res.status).toBe(403);
-    expect(mocks.requireRole).toHaveBeenCalledWith('owner');
+    expect(mocks.requireRole).toHaveBeenCalledWith('agent');
     expect(mocks.calls).toHaveLength(0);
   });
 

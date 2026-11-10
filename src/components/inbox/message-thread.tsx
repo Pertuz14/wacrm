@@ -1139,6 +1139,19 @@ export function MessageThread({
             </button>
           )}
 
+          {/* Owner only: delete this conversation with its contact */}
+          {isOwner && conversation?.contact_id && (
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              aria-label={t("deleteContact")}
+              title={t("deleteContact")}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+
           {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(

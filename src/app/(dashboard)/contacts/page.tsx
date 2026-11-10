@@ -65,6 +65,16 @@ import { pageAfterRangeError, pageAfterShrink } from '@/lib/contacts/page-bounds
 
 const PAGE_SIZE = 25;
 
+/** Deletes a contact (with its conversations and pipeline cards); true if it worked. */
+async function deleteContactViaApi(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 interface ContactWithTags extends Contact {
   tags?: Tag[];
 }
@@ -272,10 +282,9 @@ export default function ContactsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
 
-    const { error } = await supabase
-      .from('contacts')
-      .delete()
-      .eq('id', deleteTarget.id);
+    // Through the API: it removes the contact's pipeline cards first
+    // (deals.conversation_id would block the cascade otherwise).
+    const error = !(await deleteContactViaApi(deleteTarget.id));
 
     if (error) {
       toast.error(t('toastFailedDelete'));
@@ -319,9 +328,11 @@ export default function ContactsPage() {
     if (ids.length === 0) return;
     setDeleting(true);
 
-    const { error } = await supabase.from('contacts').delete().in('id', ids);
+    const results = await Promise.all(ids.map(deleteContactViaApi));
+    const error = results.some((ok) => !ok);
 
     if (error) {
+      fetchContacts();
       toast.error(t('toastBulkFailedDelete'));
     } else {
       toast.success(t('toastBulkDeleted', { count: ids.length }));
