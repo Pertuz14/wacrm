@@ -505,6 +505,15 @@ function InboxPageInner() {
     router.replace("/inbox", { scroll: false });
   }, [router]);
 
+  // Owner deleted the contact (and its conversations) from the thread header
+  const handleContactDeleted = useCallback(
+    (contactId: string) => {
+      setConversations((prev) => prev.filter((c) => c.contact_id !== contactId));
+      handleCloseConversation();
+    },
+    [handleCloseConversation],
+  );
+
 
   const handleMessagesLoaded = useCallback(
     (loaded: Message[], conversationId: string) => {
@@ -634,6 +643,7 @@ function InboxPageInner() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
+            onContactDeleted={handleContactDeleted}
           />
         </div>
 

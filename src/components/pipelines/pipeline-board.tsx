@@ -5,7 +5,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   useDroppable,
@@ -74,8 +75,11 @@ export function PipelineBoard({
   }, [sortedStages, visibleDeals]);
 
   const sensors = useSensors(
-    // 5px activation distance avoids clicks being interpreted as drags.
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // Mouse: 5px activation distance avoids clicks being interpreted as drags.
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    // Touch (phone/tablet): a swipe scrolls the column or the board; press
+    // and hold a card ~0.25 s to pick it up.
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     // Keyboard drag support: focus a card, Space to pick up, arrows to move,
     // Space to drop, Escape to cancel.
     useSensor(KeyboardSensor),
@@ -321,7 +325,7 @@ function DraggableDealCard({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
+      style={{ opacity: isDragging ? 0.3 : 1, touchAction: "manipulation", WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
     >
       <DealCard deal={deal} stage={stage} onEdit={onEdit} />
     </div>

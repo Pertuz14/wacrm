@@ -27,6 +27,8 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -68,6 +70,14 @@ import {
 } from "@/lib/inbox/business-reaction";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   confirmedSendUpdate,
   isTempMessage,
@@ -127,6 +137,11 @@ interface MessageThreadProps {
    */
   contactPanelOpen?: boolean;
   onToggleContactPanel?: () => void;
+  /**
+   * Owner only: called after the contact (and with it this conversation
+   * and its messages) was deleted, so the page drops it from the list.
+   */
+  onContactDeleted?: (contactId: string) => void;
 }
 
 function formatDateSeparator(dateStr: string, t: ReturnType<typeof useTranslations>): string {
@@ -186,12 +201,34 @@ export function MessageThread({
   onRefresh,
   contactPanelOpen,
   onToggleContactPanel,
+  onContactDeleted,
 }: MessageThreadProps) {
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
 
-  const { user } = useAuth();
+  const { user, isOwner } = useAuth();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Owner only: delete the contact with its conversations and messages
+  // (test conversations). The API checks the role again.
+  const handleDeleteContact = useCallback(async () => {
+    const contactId = conversation?.contact_id;
+    if (!contactId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(String(res.status));
+      toast.success(t("deleteContactDone"));
+      setDeleteOpen(false);
+      onContactDeleted?.(contactId);
+    } catch {
+      toast.error(t("deleteContactFailed"));
+    } finally {
+      setDeleting(false);
+    }
+  }, [conversation?.contact_id, onContactDeleted, t]);
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1124,8 +1161,47 @@ export function MessageThread({
                   {t(`status${opt.label}`)}
                 </DropdownMenuItem>
               ))}
+              {isOwner && (
+                <>
+                  <DropdownMenuSeparator className="bg-border" />
+                  <DropdownMenuItem
+                    onClick={() => setDeleteOpen(true)}
+                    className="text-sm text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    {t("deleteContact")}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {isOwner && (
+            <Dialog open={deleteOpen} onOpenChange={(open) => !deleting && setDeleteOpen(open)}>
+              <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="text-popover-foreground">{t("deleteContactTitle")}</DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
+                    {t("deleteContactDesc", { name: contact?.name || contact?.phone || "" })}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="bg-popover border-border">
+                  <Button
+                    variant="outline"
+                    onClick={() => setDeleteOpen(false)}
+                    disabled={deleting}
+                    className="border-border text-muted-foreground hover:bg-muted"
+                  >
+                    {t("deleteContactCancel")}
+                  </Button>
+                  <Button variant="destructive" onClick={handleDeleteContact} disabled={deleting}>
+                    {deleting && <Loader2 className="size-4 animate-spin" />}
+                    {t("deleteContactConfirm")}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Assign dropdown */}
           <DropdownMenu>
