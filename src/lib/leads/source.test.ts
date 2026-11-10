@@ -42,6 +42,13 @@ describe('classifyMessageMarker', () => {
     })
   })
 
+  it('reads a web visit that came from a Meta ad', () => {
+    expect(classifyMessageMarker('Hola, quiero el Programa UCAB (vi la web por un anuncio)')).toMatchObject({
+      source: 'anuncio_meta',
+      detail: 'Hola, quiero el Programa UCAB',
+    })
+  })
+
   it('reads TikTok, Instagram and unknown "(vi X)" markers', () => {
     expect(classifyMessageMarker('Hola, quiero información (vi TikTok)')?.source).toBe('tiktok')
     expect(classifyMessageMarker('Hola (vi en Instagram).')?.source).toBe('instagram')

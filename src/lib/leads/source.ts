@@ -121,6 +121,8 @@ const SCHOOL_ASK = /\bescribo de(sde)? (un|el) colegio\b|\bdiagnostico para (5|q
 
 /** Known "(vi X)" names → origin. */
 const MARKERS: [RegExp, LeadSource][] = [
+  // rumbouni.com opened from a Meta ad (?utm_source=meta or fbclid): «(vi la web por un anuncio)»
+  [/^(la )?web (por|desde) (un|el) anuncio$/, 'anuncio_meta'],
   [/^(la )?(web|pagina( web)?|sitio( web)?|rumbouni(\.com)?)$/, 'web'],
   [/^(en )?tik ?tok$/, 'tiktok'],
   [/^(en )?(instagram|ig|insta)$/, 'instagram'],
