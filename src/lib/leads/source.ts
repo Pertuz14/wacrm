@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MetaReferral } from '@/lib/whatsapp/unsupported-message'
 import { readSchoolRef, schoolRefNote, stripSchoolRef } from './school-ref'
+import { readVisitCode } from './invisible-mark'
 
 // ============================================================
 // Where a customer came from (migration 055, table lead_sources).
@@ -249,7 +250,7 @@ export async function recordLeadSource(db: SupabaseClient, args: RecordLeadSourc
     // A plain first message of a contact we already know adds nothing.
     if (last && (found.source === 'whatsapp' || found.source === 'instagram') && !found.detail) return
 
-    const { error } = await db.from('lead_sources').insert({
+    const row: Record<string, unknown> = {
       account_id: args.accountId,
       contact_id: args.contactId,
       conversation_id: args.conversationId,
@@ -261,7 +262,12 @@ export async function recordLeadSource(db: SupabaseClient, args: RecordLeadSourc
       click_id: found.clickId,
       first_message: clean(stripSchoolRef(args.text), 500),
       is_first_touch: !last,
-    })
+    }
+    // Website visit code (Meta ad → web → WhatsApp), for the Conversions API (migration 075)
+    const visitCode = args.channel === 'whatsapp' ? readVisitCode(args.text) : null
+    let { error } = await db.from('lead_sources').insert(visitCode ? { ...row, visit_code: visitCode } : row)
+    // Before migration 075 the column does not exist: keep the origin anyway
+    if (error && visitCode && /visit_code/.test(error.message ?? '')) ({ error } = await db.from('lead_sources').insert(row))
     if (error) {
       console.error('[lead source] insert failed:', error.message)
       return

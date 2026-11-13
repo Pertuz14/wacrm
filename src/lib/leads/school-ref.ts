@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { INVISIBLE, readMark } from './invisible-mark'
 
 // ============================================================
 // Allied-school link (Rumbo a la U, plan v9 phase 4).
@@ -8,40 +9,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // of the pre-filled WhatsApp text ("…(vi la web)" + invisible mark). The
 // family sees the usual message; we read the code here.
 //
-// Same encoding as the platform (web/simadi/src/public/js/marca-ref.js):
-// start (3 3) + three base-4 digits per letter + a checksum digit, with
-// U+200B / U+200C / U+200D / U+2060 as the digits 0–3.
+// Encoding: invisible-mark.ts (start 3 3).
 // ============================================================
-
-const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
-const DIGITS = ['​', '‌', '‍', '⁠']
-const START = DIGITS[3] + DIGITS[3]
-const INVISIBLE = /[​‌‍⁠]+/g
-const CODE_RE = new RegExp(`^[${ALPHABET}]{4,12}$`)
-
-function decode(run: string): string | null {
-  if (!run.startsWith(START)) return null
-  const digits = [...run.slice(START.length)].map((c) => DIGITS.indexOf(c))
-  const check = digits.pop()
-  if (digits.length < 12 || digits.length % 3 !== 0) return null
-  if (digits.reduce((s, d) => s + d, 0) % 4 !== check) return null
-  let code = ''
-  for (let i = 0; i < digits.length; i += 3) {
-    const n = digits[i] * 16 + digits[i + 1] * 4 + digits[i + 2]
-    if (n >= ALPHABET.length) return null
-    code += ALPHABET[n]
-  }
-  return CODE_RE.test(code) ? code : null
-}
 
 /** The allied-school code hidden in a message, or null (the last one wins). */
 export function readSchoolRef(text: string | null | undefined): string | null {
-  const runs = String(text ?? '').match(INVISIBLE) ?? []
-  for (const run of runs.reverse()) {
-    const code = decode(run)
-    if (code) return code
-  }
-  return null
+  return readMark(text, 'school')
 }
 
 /** The message without the invisible mark (what people and the model see). */

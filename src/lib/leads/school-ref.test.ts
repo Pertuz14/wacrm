@@ -41,3 +41,15 @@ describe('allied-school mark', () => {
     expect(schoolRefContext('k7m2qx4')).toBe('[Contexto interno: llegó por el enlace de un colegio aliado · código k7m2qx4]')
   })
 })
+
+describe('website visit code mark (Meta ads, migration 075)', () => {
+  it('lives next to the school mark without mixing them up', async () => {
+    const { encodeMark, readVisitCode } = await import('./invisible-mark')
+    const text = `Hola, quiero el paquete del SIMADI${encodeMark('abcdefgh23', 'visit')} (vi la web por un anuncio)${encodeMark('k7m2qx4', 'school')}`
+    expect(readVisitCode(text)).toBe('abcdefgh23')
+    expect(readSchoolRef(text)).toBe('k7m2qx4')
+    expect(stripSchoolRef(text)).toBe('Hola, quiero el paquete del SIMADI (vi la web por un anuncio)')
+    expect(classifyMessageMarker(text)?.source).toBe('anuncio_meta')
+    expect(readVisitCode(MESSAGE)).toBeNull()
+  })
+})
