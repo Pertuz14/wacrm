@@ -3,6 +3,7 @@ import { buildEvent, capiConfig, normalizePhone, sendEvent, sha256, type CapiCon
 import { pickTouch } from './capi-queue'
 
 const cfg: CapiConfig = {
+  tokens: { whatsapp: 'tok', instagram: 'tok', website: 'tok' },
   active: true,
   token: 'tok',
   apiVersion: 'v27.0',
@@ -138,5 +139,24 @@ describe('sending', () => {
     const c = capiConfig()
     expect(c.active).toBe(false)
     expect(c.datasets).toEqual({ whatsapp: '777', instagram: '777', website: '777' })
+  })
+})
+
+describe('one token per channel', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('the website uses META_CAPI_TOKEN_WEB when set; the rest fall back to META_CAPI_TOKEN', async () => {
+    vi.stubEnv('META_CAPI_TOKEN', 'wa-token')
+    vi.stubEnv('META_CAPI_TOKEN_WEB', 'pixel-token')
+    vi.stubEnv('META_PIXEL_ID', '333')
+    const c = capiConfig()
+    expect(c.tokens).toEqual({ whatsapp: 'wa-token', instagram: 'wa-token', website: 'pixel-token' })
+    let auth: string | null = null
+    const fetcher = (async (_u: string, init: RequestInit) => {
+      auth = new Headers(init.headers).get('authorization')
+      return new Response(JSON.stringify({ events_received: 1 }), { status: 200 })
+    }) as unknown as typeof fetch
+    await sendEvent(c, 'website', {}, { fetcher })
+    expect(auth).toBe('Bearer pixel-token')
   })
 })

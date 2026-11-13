@@ -53,6 +53,7 @@ function memoryDb(tables: Record<string, Row[]>) {
 }
 
 const cfg: CapiConfig = {
+  tokens: { whatsapp: 'tok', instagram: 'tok', website: 'tok' },
   active: true,
   token: 'tok',
   apiVersion: 'v27.0',

@@ -36,7 +36,10 @@ export const MAX_ATTEMPTS = 5
 export interface CapiConfig {
   /** META_CAPI_ACTIVO=true: events leave. Off: they wait (and expire after 7 days). */
   active: boolean
+  /** Default token, and one per channel when they differ (META_CAPI_TOKEN_WEB: the pixel's own token
+   *  from Events Manager, since the WhatsApp app cannot get pixel permissions). */
   token: string | null
+  tokens: Record<CapiChannel, string | null>
   apiVersion: string
   datasets: Record<CapiChannel, string | null>
   /** Facebook page id (needed by Meta in some business-messaging payloads). */
@@ -53,6 +56,11 @@ export function capiConfig(): CapiConfig {
   return {
     active: env('META_CAPI_ACTIVO') === 'true',
     token: env('META_CAPI_TOKEN'),
+    tokens: {
+      whatsapp: env('META_CAPI_TOKEN_WHATSAPP') ?? env('META_CAPI_TOKEN'),
+      instagram: env('META_CAPI_TOKEN_INSTAGRAM') ?? env('META_CAPI_TOKEN'),
+      website: env('META_CAPI_TOKEN_WEB') ?? env('META_CAPI_TOKEN'),
+    },
     apiVersion: env('META_CAPI_API_VERSION') ?? 'v27.0',
     datasets: {
       whatsapp: env('META_CAPI_DATASET_WHATSAPP') ?? shared,
@@ -66,7 +74,8 @@ export function capiConfig(): CapiConfig {
 }
 
 /** Ready to send on that channel (token + dataset). */
-export const canSend = (cfg: CapiConfig, channel: CapiChannel) => Boolean(cfg.token && cfg.datasets[channel])
+export const tokenFor = (cfg: CapiConfig, channel: CapiChannel) => cfg.tokens?.[channel] ?? cfg.token
+export const canSend = (cfg: CapiConfig, channel: CapiChannel) => Boolean(tokenFor(cfg, channel) && cfg.datasets[channel])
 
 export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 
@@ -159,7 +168,8 @@ export async function sendEvent(
   opts: { test?: boolean; fetcher?: Fetcher } = {},
 ): Promise<SendResult> {
   const dataset = cfg.datasets[channel]
-  if (!cfg.token || !dataset) return { ok: false, detail: 'Falta el token o el dataset de Meta' }
+  const token = tokenFor(cfg, channel)
+  if (!token || !dataset) return { ok: false, detail: 'Falta el token o el dataset de Meta' }
   const body: Record<string, unknown> = { data: [event] }
   const testCode = opts.test ? cfg.testCode : null
   if (testCode) body.test_event_code = testCode
@@ -168,7 +178,7 @@ export async function sendEvent(
       `https://graph.facebook.com/${cfg.apiVersion}/${encodeURIComponent(dataset)}/events`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.token}` },
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(15_000),
       },

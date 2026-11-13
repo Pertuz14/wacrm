@@ -38,6 +38,11 @@ export async function GET() {
         active: cfg.active,
         test: Boolean(cfg.testCode),
         token: Boolean(cfg.token),
+        tokens: {
+          whatsapp: Boolean(cfg.tokens.whatsapp),
+          instagram: Boolean(cfg.tokens.instagram),
+          website: Boolean(cfg.tokens.website),
+        },
         datasets: {
           whatsapp: Boolean(cfg.datasets.whatsapp),
           instagram: Boolean(cfg.datasets.instagram),
