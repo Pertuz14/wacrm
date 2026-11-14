@@ -2,6 +2,7 @@ import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
 import { conversationSchoolRef, schoolRefContext } from '@/lib/leads/school-ref'
+import { adContext, conversationAd } from '@/lib/leads/ad-context'
 import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
 import { aiReplyDebounceMs, buildSystemPrompt } from './defaults'
@@ -174,16 +175,14 @@ export async function dispatchInboundToAiReply(
     // Allied-school link (WhatsApp only): an internal line so the bot asks
     // year and section only to these customers, when they fill in the REGISTRO.
     const schoolRef = conv.channel === 'instagram' ? null : await conversationSchoolRef(db, conversationId)
-    const systemPrompt =
-      conv.channel === 'instagram'
-        ? `${basePrompt}
-
-${await instagramChannelNote(db, accountId)}`
-        : schoolRef
-          ? `${basePrompt}
-
-${schoolRefContext(schoolRef)}`
-          : basePrompt
+    // Came from a Meta ad: the ad's headline tells the bot which product (the first message is often generic).
+    const ad = await conversationAd(db, conversationId)
+    const extras = [
+      conv.channel === 'instagram' ? await instagramChannelNote(db, accountId) : null,
+      schoolRef ? schoolRefContext(schoolRef) : null,
+      ad ? adContext(ad.headline) : null,
+    ].filter(Boolean)
+    const systemPrompt = extras.length ? `${basePrompt}\n\n${extras.join('\n\n')}` : basePrompt
 
     const { text, handoff: sentinelHandoff, usage } = await generateReply({
       config,
