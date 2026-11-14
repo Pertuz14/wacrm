@@ -3,12 +3,13 @@
 // register it (scope: sales:write). approved → processing, atomically,
 // so it is registered only once. 409 when it isn't approved (the owner
 // hasn't tapped "Habilitar acceso", or it was already taken).
-// Response: { data: { id, fields, phone } }
+// Response: { data: { id, fields, phone, origin } } (origin: where the buyer came from, or null)
 // ============================================================
 
 import { requireApiKey } from '@/lib/auth/api-context'
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond'
 import { UUID_RE, type PaymentAlertRow } from '@/lib/ai/payment-alerts'
+import { saleOrigin } from '@/lib/leads/sale-origin'
 
 export async function POST(
   request: Request,
@@ -28,7 +29,7 @@ export async function POST(
       .maybeSingle()
     const row = data as PaymentAlertRow | null
     if (!row) return fail('conflict', 'Payment alert is not approved', 409)
-    return ok({ id: row.id, fields: row.fields, phone: row.phone })
+    return ok({ id: row.id, fields: row.fields, phone: row.phone, origin: await saleOrigin(ctx.supabase, ctx.accountId, row.contact_id) })
   } catch (err) {
     return toApiErrorResponse(err)
   }

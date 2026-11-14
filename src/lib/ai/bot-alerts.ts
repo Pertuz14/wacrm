@@ -9,6 +9,8 @@ import {
   sendTelegramTextWithButtons,
 } from '@/lib/notifications/telegram'
 import { alertButtons, previewRegistration } from './payment-alerts'
+import { properName } from '@/lib/text/proper-name'
+import { saleOrigin } from '@/lib/leads/sale-origin'
 
 // ============================================================
 // Alerts the assistant raises to the business owner (over Telegram):
@@ -46,7 +48,7 @@ async function loadContact(db: Db, target: AlertTarget): Promise<ContactInfo | n
 
 function contactLineOf(contact: ContactInfo | null): string {
   const phone = contact?.phone ? `+${contact.phone.replace(/^\+/, '')}` : ''
-  return [contact?.name?.trim(), phone].filter(Boolean).join(' · ') || 'Cliente'
+  return [properName(contact?.name) || null, phone].filter(Boolean).join(' · ') || 'Cliente'
 }
 
 async function contactLine(db: Db, target: AlertTarget): Promise<string> {
@@ -228,7 +230,7 @@ export async function alertPaymentToVerify(
       ? await createPaymentAlert(db, target, registroFields, contact?.phone ?? null)
       : null
     const preview = alertId && registroFields
-      ? await previewRegistration(registroFields, contact?.phone ?? null)
+      ? await previewRegistration(registroFields, contact?.phone ?? null, await saleOrigin(db, target.accountId, target.contactId))
       : null
     let registerBlock = extracted ? `📋 Para registrar el acceso (en orden):\n${extracted}` : ''
     if (preview) {

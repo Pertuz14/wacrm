@@ -5,6 +5,7 @@ import {
   type SentMessage,
   type TelegramButton,
 } from '@/lib/notifications/telegram'
+import type { SaleOrigin } from '@/lib/leads/sale-origin'
 
 // ============================================================
 // One-tap "enable access" for payment alerts (see migration 052).
@@ -20,6 +21,7 @@ import {
 export interface PaymentAlertRow {
   id: string
   account_id: string
+  contact_id: string | null
   status: 'pending' | 'approved' | 'processing' | 'done'
   fields: Record<string, string>
   phone: string | null
@@ -57,12 +59,13 @@ export interface RegistrationPreview {
 export async function previewRegistration(
   fields: Record<string, string>,
   phone: string | null,
+  origin: SaleOrigin | null = null,
 ): Promise<RegistrationPreview | null> {
   try {
     const res = await fetch(`${platformUrl()}/api/crm/vista-previa`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields, phone }),
+      body: JSON.stringify({ fields, phone, origin }),
       signal: AbortSignal.timeout(15_000),
     })
     const data = (await res.json().catch(() => null)) as RegistrationPreview | null

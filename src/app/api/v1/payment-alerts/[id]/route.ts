@@ -3,12 +3,13 @@
 //
 // The store's platform reads it to pre-fill its sale form
 // ("📝 Revisar en el formulario" button). See migration 052.
-// Response: { data: { id, status, fields, phone, summary, error, created_at } }
+// Response: { data: { id, status, fields, phone, origin, summary, error, created_at } }
 // ============================================================
 
 import { requireApiKey } from '@/lib/auth/api-context'
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond'
 import { loadAlert } from '@/lib/ai/payment-alerts'
+import { saleOrigin } from '@/lib/leads/sale-origin'
 
 export async function GET(
   request: Request,
@@ -24,6 +25,7 @@ export async function GET(
       status: row.status,
       fields: row.fields,
       phone: row.phone,
+      origin: await saleOrigin(ctx.supabase, ctx.accountId, row.contact_id),
       summary: row.summary,
       error: row.error,
     })
