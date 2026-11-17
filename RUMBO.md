@@ -27,8 +27,16 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Qué hace:** el cuerpo acepta `voice: true` (solo en `type: 'audio'`) y `conversation_id` (una conversación de la cuenta) en lugar de `to`.
 - **Archivos:** `src/app/api/v1/messages/route.ts` (lee `conversation_id` y `voice`), `src/lib/whatsapp/send-message.ts` (campo `voice` en `SendMessageParams` y lo pasa a `sendMediaMessage`), `src/lib/whatsapp/meta-api.ts` (`audio.voice = true` si se pide). Nuevo `src/lib/rumbo/conversation.ts` (busca la conversación por id y cuenta) y `src/lib/rumbo/voice-note.test.ts`.
 
+### 4. «No contactar» (17-nov-2026)
+- **Por qué:** cuando la persona dice que no («mejor no», «no me escriban»), nada automático debe volver a escribirle. La plataforma
+  ya lee las etiquetas del contacto por la API, pero el bot no tenía cómo poner una etiqueta libre (sus `[[ETIQUETA:…]]` solo mueven etapas).
+- **Qué hace:** si la respuesta del bot trae `[[NO_CONTACTAR]]`, el contacto recibe la etiqueta «No contactar» (se crea si no existe).
+  La plataforma no le manda rescates ni diagnósticos. Gabriel la puede poner o quitar a mano.
+- **Archivos:** nuevo `src/lib/rumbo/after-reply.ts` (+ prueba); en `auto-reply.ts` la llamada de después de la respuesta pasa a
+  `rumboAfterReply(…)` (hace lo de los medios y esto).
+
 ### Pruebas
-`npx vitest run src/lib/rumbo` (7 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
+`npx vitest run src/lib/rumbo` (8 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).
