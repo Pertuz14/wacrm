@@ -92,6 +92,8 @@ export interface SendMessageParams {
   interactivePayload?: InteractiveMessagePayload | null;
   replyToMessageId?: string | null;
   senderId?: string | null;
+  /** Rumbo (RUMBO.md): audio only — send an OGG/Opus file as a native voice note. */
+  voice?: boolean;
 }
 
 export interface SendMessageResult {
@@ -375,6 +377,7 @@ export async function sendMessageToConversation(
         caption: contentText || undefined,
         filename: filename || undefined,
         contextMessageId,
+        voice: params.voice === true && messageType === 'audio',
       });
       return result.messageId;
     }

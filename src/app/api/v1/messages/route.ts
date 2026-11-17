@@ -43,6 +43,7 @@ import {
 } from '@/lib/whatsapp/send-message';
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive';
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver';
+import { UUID_RE, conversationOfAccount } from '@/lib/rumbo/conversation';
 
 export async function POST(request: Request) {
   try {
@@ -57,7 +58,13 @@ export async function POST(request: Request) {
     }
 
     const to = typeof body.to === 'string' ? body.to.trim() : '';
-    if (!to) {
+    // Rumbo (RUMBO.md): an existing conversation of this account can be the
+    // target instead of a phone — the only way to reach an Instagram thread.
+    const conversationId =
+      typeof body.conversation_id === 'string' && UUID_RE.test(body.conversation_id)
+        ? body.conversation_id
+        : null;
+    if (!to && !conversationId) {
       return fail('bad_request', "'to' is required", 400);
     }
 
@@ -101,12 +108,14 @@ export async function POST(request: Request) {
     // Find-or-create the conversation for this phone, then send. Both
     // steps share `SendMessageError`, so one catch maps the whole
     // pipeline to the envelope.
-    const resolved = await resolveConversationByPhone(
-      ctx.supabase,
-      ctx.accountId,
-      to,
-      typeof body.name === 'string' ? body.name : null
-    );
+    const resolved = conversationId
+      ? await conversationOfAccount(ctx.supabase, ctx.accountId, conversationId)
+      : await resolveConversationByPhone(
+          ctx.supabase,
+          ctx.accountId,
+          to,
+          typeof body.name === 'string' ? body.name : null
+        );
 
     if (resolved.conversationCreated) {
       after(() =>
@@ -136,6 +145,7 @@ export async function POST(request: Request) {
           typeof body.reply_to_message_id === 'string'
             ? body.reply_to_message_id
             : null,
+        voice: body.voice === true,
       }
     );
 

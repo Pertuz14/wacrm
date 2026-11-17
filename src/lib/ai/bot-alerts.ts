@@ -208,18 +208,23 @@ async function createPaymentAlert(
   return (data as { id: string }).id
 }
 
-/** Payment receipt + registration to verify. */
+/**
+ * Payment receipt + registration to verify.
+ * Rumbo (RUMBO.md): `receipt` = the image sent from the platform's payment page (the
+ * chat has none then); returns the alert id so the platform can link its record.
+ */
 export async function alertPaymentToVerify(
   db: Db,
   target: AlertTarget,
   registroFields: Record<string, string> | null,
-): Promise<void> {
-  if (!isTelegramConfigured()) return
+  receipt: { bytes: Uint8Array<ArrayBuffer>; mimeType: string } | null = null,
+): Promise<string | null> {
+  if (!isTelegramConfigured()) return null
   try {
     const [contact, registro, image] = await Promise.all([
       loadContact(db, target),
-      latestRegistroText(db, target.conversationId),
-      latestCustomerImage(db, target.conversationId),
+      receipt ? Promise.resolve(null) : latestRegistroText(db, target.conversationId),
+      receipt ? Promise.resolve(null) : latestCustomerImage(db, target.conversationId),
     ])
     const who = contactLineOf(contact)
     const link = conversationLink(target.conversationId)
@@ -245,7 +250,7 @@ export async function alertPaymentToVerify(
       // What will be registered first; the customer's own text below for anything extra.
       registerBlock,
       registro ? `📝 Lo que escribió el cliente:\n${registro}` : '',
-      image ? '' : '⚠️ No encontré la captura del pago en el chat.',
+      image || receipt ? '' : '⚠️ No encontré la captura del pago en el chat.',
       link ? `🔗 ${link}` : '',
     ]
       .filter(Boolean)
@@ -265,8 +270,8 @@ export async function alertPaymentToVerify(
       if (!sent.ok) console.warn('[bot alerts] payment alert not sent:', sent.error)
     }
 
-    if (image) {
-      const file = await loadImageBytes(db, target.accountId, image)
+    if (image || receipt) {
+      const file = receipt ?? (image ? await loadImageBytes(db, target.accountId, image) : null)
       if (file) {
         const ext = file.mimeType.split('/')[1]?.split(';')[0] || 'jpg'
         const r = await sendTelegramImage({
@@ -278,8 +283,10 @@ export async function alertPaymentToVerify(
         if (!r.ok) console.warn('[bot alerts] receipt image not sent:', r.error)
       }
     }
+    return alertId
   } catch (err) {
     console.error('[bot alerts] payment alert failed:', err)
+    return null
   }
 }
 

@@ -22,6 +22,7 @@ import { sendTypingIndicator } from '@/lib/whatsapp/meta-api'
 import { instagramTyping } from '@/lib/instagram/send'
 import { instagramChannelNote } from '@/lib/instagram/channel-note'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { sendRequestedMedia, withCheckoutLink } from '@/lib/rumbo/checkout-link'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -206,7 +207,7 @@ export async function dispatchInboundToAiReply(
 
     // Split into the customer-facing messages and the control tags the
     // prompt may emit (handoff, payment to verify, registration data).
-    const { messages: parts, actions } = parseBotOutput(text)
+    const { messages: botParts, actions } = parseBotOutput(text)
     const handoffAction = hasAction(actions, 'handoff')
     const handoff = sentinelHandoff || Boolean(handoffAction)
     const target = { accountId, conversationId, contactId }
@@ -220,6 +221,9 @@ export async function dispatchInboundToAiReply(
     ) {
       return
     }
+
+    // Rumbo (RUMBO.md): the private payment link goes into the reply itself.
+    const parts = await withCheckoutLink(db, target, text, botParts, conv.channel)
 
     if (parts.length > 0) {
       // Atomically claim a reply slot: the cap check + increment happen in
@@ -258,6 +262,9 @@ export async function dispatchInboundToAiReply(
         })
       }
     }
+
+    // Rumbo (RUMBO.md): clips / fixed voice notes the reply asked for, after it.
+    if (parts.length > 0) await sendRequestedMedia(db, target, text, conv.channel)
 
     if (hasAction(actions, 'verify_payment')) {
       await alertPaymentToVerify(db, target, hasAction(actions, 'registro')?.fields ?? null)
