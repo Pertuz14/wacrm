@@ -22,7 +22,8 @@ import { sendTypingIndicator } from '@/lib/whatsapp/meta-api'
 import { instagramTyping } from '@/lib/instagram/send'
 import { instagramChannelNote } from '@/lib/instagram/channel-note'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
-import { sendRequestedMedia, withCheckoutLink } from '@/lib/rumbo/checkout-link'
+import { withCheckoutLink } from '@/lib/rumbo/checkout-link'
+import { rumboAfterReply } from '@/lib/rumbo/after-reply'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -263,8 +264,8 @@ export async function dispatchInboundToAiReply(
       }
     }
 
-    // Rumbo (RUMBO.md): clips / fixed voice notes the reply asked for, after it.
-    if (parts.length > 0) await sendRequestedMedia(db, target, text, conv.channel)
+    // Rumbo (RUMBO.md): clips / fixed voice notes the reply asked for, and the «No contactar» tag.
+    if (parts.length > 0) await rumboAfterReply(db, target, text, conv.channel)
 
     if (hasAction(actions, 'verify_payment')) {
       await alertPaymentToVerify(db, target, hasAction(actions, 'registro')?.fields ?? null)
