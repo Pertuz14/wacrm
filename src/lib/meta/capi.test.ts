@@ -45,7 +45,7 @@ describe('capi payloads', () => {
     )
     expect(e.event_name).toBe('LeadSubmitted')
     expect(e.messaging_channel).toBe('instagram')
-    expect(e.user_data).toEqual({ instagram_business_account_id: 'ig', ig_sid: 'sid' })
+    expect(e.user_data).toEqual({ ig_account_id: 'ig', ig_sid: 'sid' })
     expect(e.custom_data).toBeUndefined()
   })
 

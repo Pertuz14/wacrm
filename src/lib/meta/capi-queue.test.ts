@@ -201,7 +201,7 @@ describe('flushCapiQueue', () => {
     expect(sent[0].body.data[0]).toMatchObject({
       event_name: 'LeadSubmitted',
       messaging_channel: 'instagram',
-      user_data: { instagram_business_account_id: 'ig-1', ig_sid: 'igsid-1' },
+      user_data: { ig_account_id: 'ig-1', ig_sid: 'igsid-1' },
     })
   })
 

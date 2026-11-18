@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 //     messaging_channel "whatsapp", user_data { whatsapp_business_account_id,
 //     ctwa_clid } — the click id Meta sends with the first message.
 //   * Click-to-Instagram-Direct ad: messaging_channel "instagram",
-//     user_data { instagram_business_account_id, ig_sid }.
+//     user_data { ig_account_id, ig_sid }.
 //   * Ad → rumbouni.com → WhatsApp: the website already told Meta about the
 //     visit (pixel + server "Contact", with the visit code as external_id);
 //     we send the later steps to the website's dataset with
@@ -129,7 +129,7 @@ export function buildEvent(input: CapiEventInput, cfg: Pick<CapiConfig, 'pageId'
   } else if (identity.channel === 'instagram') {
     event.action_source = 'business_messaging'
     event.messaging_channel = 'instagram'
-    event.user_data = { instagram_business_account_id: identity.igAccountId, ig_sid: identity.igsid }
+    event.user_data = { ig_account_id: identity.igAccountId, ig_sid: identity.igsid }
   } else {
     event.action_source = 'chat'
     const phone = normalizePhone(identity.phone)
