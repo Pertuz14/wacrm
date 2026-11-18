@@ -88,7 +88,7 @@ async function processEvents(events: IgEvent[]) {
           kind: 'message', igAccountId: ev.igAccountId, customerId: ev.customerId, isEcho: false, mid: ev.mid,
           timestamp: ev.timestamp, text: ev.title || ev.payload, contentType: 'text', mediaUrl: null,
           replyToMid: null, storyReplyUrl: null, quickReplyPayload: ev.payload, isDeleted: false,
-          referral: null,
+          referral: null, sharedAssetId: null,
         })
       } else if (ev.kind === 'reaction') await handleReaction(config, ev)
       else if (ev.kind === 'comment') await handleComment(config, ev)
@@ -304,6 +304,7 @@ async function handleMessage(config: InstagramConfig, ev: Extract<IgEvent, { kin
     isFirstInbound,
     text,
     igReferral: ev.referral,
+    igSharedAssetId: ev.sharedAssetId,
     commentKeyword,
   })
 

@@ -11,7 +11,7 @@ import type { IgReferral } from '@/lib/leads/source'
 
 export interface IgAttachment {
   type: string
-  payload?: { url?: string; title?: string; reel_video_id?: string }
+  payload?: { url?: string; title?: string; reel_video_id?: string; ig_post_media_id?: string }
 }
 
 export interface IgMessagingItem {
@@ -75,6 +75,8 @@ export type IgEvent =
       isDeleted: boolean
       /** Ad that opened the thread, when Meta sends one. */
       referral: IgReferral | null
+      /** Id of a post or reel shared in the DM (an ad's post arrives this way, often without `referral`). */
+      sharedAssetId: string | null
     }
   | { kind: 'reaction'; igAccountId: string; customerId: string; mid: string; emoji: string | null; removed: boolean }
   | { kind: 'postback'; igAccountId: string; customerId: string; mid: string; timestamp: number; title: string; payload: string }
@@ -109,11 +111,34 @@ export function attachmentContentType(type: string | undefined): 'text' | 'image
   }
 }
 
+/**
+ * A post or reel attached from Instagram's own CDN (`lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=…`). This is how
+ * a DM written from an ad shows the ad's post, and how a shared post arrives in newer API versions (type `ig_post` or
+ * a type this parser does not know yet). The link is temporary and useless as text: it is never shown.
+ */
+const isIgAssetUrl = (url: string | undefined) => /^https:\/\/lookaside\.fbsbx\.com\/ig_messaging_cdn\//.test(url ?? '')
+
+/** Id of the shared post or reel, or null. */
+export function sharedAssetId(a: IgAttachment | undefined): string | null {
+  if (!a) return null
+  let fromUrl: string | null = null
+  if (isIgAssetUrl(a.payload?.url)) {
+    try {
+      fromUrl = new URL(a.payload!.url!).searchParams.get('asset_id')
+    } catch {
+      fromUrl = null
+    }
+  }
+  const id = a.payload?.ig_post_media_id ?? fromUrl
+  return id && /^\d{5,30}$/.test(id) ? id : null
+}
+
 /** Readable text for attachments that are not plain media. */
 function attachmentLabel(a: IgAttachment): string | null {
   switch (a.type) {
     case 'share':
-      return '[Compartió una publicación]'
+    case 'ig_post':
+      return a.payload?.title ? `[Compartió una publicación de Instagram: ${a.payload.title}]` : '[Compartió una publicación de Instagram]'
     case 'story_mention':
       return '[Le mencionó en su historia]'
     case 'ig_reel':
@@ -122,7 +147,9 @@ function attachmentLabel(a: IgAttachment): string | null {
     case 'fallback':
       return '[Enlace compartido]'
     default:
-      return null
+      return isIgAssetUrl(a.payload?.url)
+        ? a.payload?.title ? `[Compartió una publicación de Instagram: ${a.payload.title}]` : '[Compartió una publicación de Instagram]'
+        : null
   }
 }
 
@@ -148,7 +175,9 @@ export function parseInstagramWebhook(body: IgWebhookBody): IgEvent[] {
           ? '[Mensaje eliminado]'
           : msg.is_unsupported
             ? '[Mensaje no compatible: ábralo en Instagram]'
-            : [msg.text, label, contentType === 'text' && first?.payload?.url ? first.payload.url : null].filter(Boolean).join(' ') || null
+            : [msg.text, label, contentType === 'text' && first?.payload?.url && !isIgAssetUrl(first.payload.url) ? first.payload.url : null]
+                .filter(Boolean)
+                .join(' ') || null
         events.push({
           kind: 'message',
           igAccountId,
@@ -164,6 +193,7 @@ export function parseInstagramWebhook(body: IgWebhookBody): IgEvent[] {
           quickReplyPayload: msg.quick_reply?.payload ?? null,
           isDeleted: msg.is_deleted === true,
           referral: msg.referral ?? m.referral ?? null,
+          sharedAssetId: sharedAssetId(first),
         })
       } else if (m.reaction?.mid && senderId && senderId !== igAccountId) {
         events.push({

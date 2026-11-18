@@ -167,6 +167,8 @@ export interface RecordLeadSourceArgs {
   text: string | null
   waReferral?: MetaReferral | null
   igReferral?: IgReferral | null
+  /** Post or reel shared in the DM (webhook-parse sharedAssetId). */
+  igSharedAssetId?: string | null
   /** Keyword of the comment-to-DM reply this DM answers, if any. */
   commentKeyword?: string | null
 }
@@ -224,11 +226,73 @@ async function recordSchoolRef(db: SupabaseClient, args: RecordLeadSourceArgs): 
 /** Same origin again within this window is not a new arrival. */
 const REPEAT_WINDOW_MS = 12 * 60 * 60 * 1000
 
+/**
+ * Instagram ads (18-nov-2026): a DM written from an ad starts with the ad's post (a shared post, its own message)
+ * and the ad's question («¿Cómo funciona?»). Meta sends the ad's `referral` with the question… sometimes: other
+ * people writing from the same ad, the same day, arrive without it. The post is the same for everyone who writes
+ * from that ad, so:
+ *   - the arrival of the post keeps it as `source_url` (also a plain «Instagram» arrival);
+ *   - an ad referral takes the post of its conversation as `source_url`;
+ *   - a post without a referral takes the ad of an earlier arrival with that post.
+ */
+export const igAssetKey = (assetId: string) => `https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=${assetId}`
+const IG_ASSET_PREFIX = 'https://lookaside.fbsbx.com/ig_messaging_cdn/'
+
+type AdRow = { source: LeadSource; detail: string | null; ad_id: string }
+
+/** The ad an Instagram post belongs to, from earlier arrivals with that post (or null). Never throws. */
+export async function adOfSharedAsset(db: SupabaseClient, accountId: string, assetId: string): Promise<ClassifiedSource | null> {
+  if (!/^\d{5,30}$/.test(assetId)) return null
+  try {
+    const ads = () =>
+      db.from('lead_sources').select('source, detail, ad_id').eq('account_id', accountId).eq('channel', 'instagram').not('ad_id', 'is', null)
+    const { data: byPost } = await ads().eq('source_url', igAssetKey(assetId)).order('created_at', { ascending: false }).limit(1)
+    let row = (byPost ?? [])[0] as AdRow | undefined
+    if (!row) {
+      // Arrivals before 18-nov: the post's link is only in the conversation's messages
+      const { data: msgs } = await db.from('messages').select('conversation_id').ilike('content_text', `%asset_id=${assetId}%`).limit(20)
+      const ids = [...new Set(((msgs ?? []) as { conversation_id: string }[]).map((m) => m.conversation_id))]
+      if (ids.length) {
+        const { data: old } = await ads().in('conversation_id', ids).order('created_at', { ascending: false }).limit(1)
+        row = (old ?? [])[0] as AdRow | undefined
+      }
+    }
+    return row ? result(row.source, row.detail, { adId: row.ad_id, sourceUrl: igAssetKey(assetId) }) : null
+  } catch {
+    return null
+  }
+}
+
+/** The post shared earlier in this conversation (its arrival's source_url), or null. Never throws. */
+async function sharedPostOfConversation(db: SupabaseClient, conversationId: string): Promise<string | null> {
+  try {
+    const { data } = await db
+      .from('lead_sources')
+      .select('source_url')
+      .eq('conversation_id', conversationId)
+      .like('source_url', `${IG_ASSET_PREFIX}%`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    return ((data ?? [])[0] as { source_url: string } | undefined)?.source_url ?? null
+  } catch {
+    return null
+  }
+}
+
 /** Classify an inbound message and store its origin. Never throws. */
 export async function recordLeadSource(db: SupabaseClient, args: RecordLeadSourceArgs): Promise<void> {
   await recordSchoolRef(db, args)
   try {
-    const found = classifyInbound(args)
+    let found = classifyInbound(args)
+    if (args.channel === 'instagram') {
+      const asset = args.igSharedAssetId
+      if (found?.adId && !found.sourceUrl) {
+        const post = asset ? igAssetKey(asset) : await sharedPostOfConversation(db, args.conversationId)
+        if (post) found = { ...found, sourceUrl: post }
+      } else if (asset && (!found || found.source === 'instagram')) {
+        found = (await adOfSharedAsset(db, args.accountId, asset)) ?? (found && { ...found, sourceUrl: igAssetKey(asset) })
+      }
+    }
     if (!found) return
 
     const { data: prior, error: priorError } = await db

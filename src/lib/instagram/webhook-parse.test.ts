@@ -51,6 +51,19 @@ describe('parseInstagramWebhook', () => {
     expect(story).toMatchObject({ storyReplyUrl: 'https://cdn/story' })
   })
 
+  it('describes an ad post or shared post from Instagram\'s CDN, without its temporary link, and keeps its id', () => {
+    const url = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=18132752353882978&signature=Ab18bifrVhZ'
+    const [unknown, igPost] = parseInstagramWebhook({
+      entry: [{ id: IG, messaging: [
+        { sender: { id: CUSTOMER }, recipient: { id: IG }, message: { mid: 'm6', attachments: [{ type: 'unknown_new_type', payload: { url } }] } },
+        { sender: { id: CUSTOMER }, recipient: { id: IG }, message: { mid: 'm7', attachments: [{ type: 'ig_post', payload: { url, ig_post_media_id: '18132752353882978', title: 'Prepárate para el SIMADI' } }] } },
+      ] }],
+    })
+    expect(unknown).toMatchObject({ contentType: 'text', text: '[Compartió una publicación de Instagram]', sharedAssetId: '18132752353882978', referral: null })
+    expect(igPost).toMatchObject({ text: '[Compartió una publicación de Instagram: Prepárate para el SIMADI]', sharedAssetId: '18132752353882978' })
+    expect((unknown as { text: string }).text).not.toContain('lookaside')
+  })
+
   it('reads reactions and comments, skipping our own comments', () => {
     const events = parseInstagramWebhook({
       entry: [{

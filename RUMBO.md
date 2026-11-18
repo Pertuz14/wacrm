@@ -35,6 +35,17 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Archivos:** nuevo `src/lib/rumbo/after-reply.ts` (+ prueba); en `auto-reply.ts` la llamada de después de la respuesta pasa a
   `rumboAfterReply(…)` (hace lo de los medios y esto).
 
+### 5. Instagram: la publicación del anuncio (18-nov-2026, archivos propios de Rumbo, no del original)
+- **Qué pasaba:** quien escribe desde un anuncio de Instagram manda primero la publicación del anuncio (un adjunto de
+  `lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=…` de un tipo que el CRM no conocía) y después la pregunta del anuncio.
+  En el chat salía el enlace largo, el bot creía que era una imagen que no podía ver, y Meta a veces no manda el
+  `referral` del anuncio: esas personas quedaban como «Instagram» y el bot no sabía de qué producto venían.
+- **Qué hace:** `webhook-parse.ts` escribe «[Compartió una publicación de Instagram]» (sin el enlace temporal) y guarda
+  el id de la publicación; `leads/source.ts` guarda esa publicación en `lead_sources.source_url` (también en la llegada
+  con `referral`, aunque llegue en el mensaje siguiente) y, si alguien llega con la misma publicación sin `referral`,
+  toma el anuncio de una llegada anterior. El bot recibe el contexto del anuncio como siempre (`ad-context.ts`, que
+  ahora también explica la publicación compartida). Sin migración.
+
 ### Pruebas
 `npx vitest run src/lib/rumbo` (8 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 

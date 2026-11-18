@@ -12,7 +12,8 @@ const WINDOW_MS = 24 * 60 * 60 * 1000
 /** Internal line for the system prompt (never shown to the customer). */
 export const adContext = (headline: string | null) =>
   `[Contexto interno: la persona llegó tocando un anuncio de Meta${headline ? ` cuyo título es «${headline}»` : ''}. ` +
-  'Su primer mensaje puede ser el texto automático de WhatsApp («Quiero más información», «Hello! Can I get more info on this?» u otro idioma): ' +
+  'Su primer mensaje puede ser el texto automático de WhatsApp («Quiero más información», «Hello! Can I get more info on this?» u otro idioma) ' +
+  'o, en Instagram, la publicación del anuncio («[Compartió una publicación de Instagram]»: es el anuncio, no una imagen que no puedas ver; no lo menciones): ' +
   'no es una pregunta concreta. Responde en español' +
   (headline
     ? ' y da la bienvenida directamente sobre el producto de ese anuncio (sin preguntar qué examen presenta si el título ya lo dice).]'

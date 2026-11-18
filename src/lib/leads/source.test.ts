@@ -141,6 +141,53 @@ describe('recordLeadSource', () => {
     expect(inserts).toHaveLength(0)
   })
 
+  /** A fake database that answers each query by its table and filters. */
+  function igDb(answer: (table: string, filters: string[]) => unknown[]) {
+    const inserts: { table: string; row: Record<string, unknown> }[] = []
+    const from = (table: string) => {
+      const filters: string[] = []
+      const q: Record<string, unknown> = {}
+      for (const m of ['select', 'order']) q[m] = () => q
+      for (const m of ['eq', 'not', 'in', 'like', 'ilike']) q[m] = (c: string, v: unknown, w?: unknown) => { filters.push(`${m}:${c}:${String(w ?? v)}`); return q }
+      q.limit = async () => ({ data: answer(table, filters), error: null })
+      q.insert = async (row: Record<string, unknown>) => { inserts.push({ table, row }); return { error: null } }
+      return q
+    }
+    return { db: { from } as unknown as Parameters<typeof recordLeadSource>[0], inserts }
+  }
+  const POST = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=18132752353882978'
+  const AD = { source: 'anuncio_instagram', detail: 'SIMADI A · Reel', ad_id: '1202540' }
+  const igArgs = { ...args, channel: 'instagram' as const, text: '[Compartió una publicación de Instagram]' }
+
+  it('Instagram: the ad post without a referral takes the ad of an earlier arrival with that post', async () => {
+    const { db, inserts } = igDb((t, f) => (t === 'lead_sources' && f.includes(`eq:source_url:${POST}`) ? [AD] : []))
+    await recordLeadSource(db, { ...igArgs, igSharedAssetId: '18132752353882978' })
+    expect(inserts[0]).toMatchObject({ table: 'lead_sources', row: { ...AD, source_url: POST } })
+  })
+
+  it('Instagram: before 18-nov the post was only in the messages of the earlier conversation', async () => {
+    const { db, inserts } = igDb((t, f) =>
+      t === 'messages' ? [{ conversation_id: 'conv-genesis' }] : t === 'lead_sources' && f.some((x) => x.startsWith('in:conversation_id')) ? [AD] : [],
+    )
+    await recordLeadSource(db, { ...igArgs, igSharedAssetId: '18132752353882978' })
+    expect(inserts[0]).toMatchObject({ row: { ...AD, source_url: POST } })
+  })
+
+  it('Instagram: a post of an unknown ad is a plain arrival that keeps the post for later', async () => {
+    const { db, inserts } = igDb(() => [])
+    await recordLeadSource(db, { ...igArgs, igSharedAssetId: '18132752353882978' })
+    expect(inserts[0]).toMatchObject({ row: { source: 'instagram', ad_id: null, source_url: POST } })
+  })
+
+  it('Instagram: the ad referral (on the question) takes the post of its conversation', async () => {
+    const { db, inserts } = igDb((t, f) => (f.some((x) => x.startsWith('like:source_url')) ? [{ source_url: POST }] : []))
+    await recordLeadSource(db, {
+      ...igArgs, text: '¿Cómo funciona?', isFirstInbound: false,
+      igReferral: { ad_id: '1202540', source: 'ADS', ads_context_data: { ad_title: 'SIMADI A' } },
+    })
+    expect(inserts[0]).toMatchObject({ row: { source: 'anuncio_instagram', ad_id: '1202540', source_url: POST } })
+  })
+
   it('keeps a new origin of a known contact as a later touch', async () => {
     const { db, inserts } = fakeDb([{ source: 'whatsapp', detail: null, ad_id: null, created_at: '2026-01-01T00:00:00Z' }])
     await recordLeadSource(db, { ...args, isFirstInbound: false })
