@@ -1,4 +1,6 @@
 import Linkify from 'linkify-react';
+// Rumbo (RUMBO.md, cambio 7): *negrita*, _cursiva_ y ~tachado~ como en WhatsApp
+import { nodosWhatsApp } from '@/lib/rumbo/whatsapp-format';
 
 interface LinkifyTextProps {
   text: string;
@@ -24,7 +26,7 @@ export function LinkifyText({ text, isAgent, className }: LinkifyTextProps) {
         },
       }}
     >
-      {text}
+      {nodosWhatsApp(text)}
     </Linkify>
   );
 }

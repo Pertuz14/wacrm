@@ -53,6 +53,14 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Qué hace:** la burbuja lleva `min-w-0 max-w-full`, así el enlace se parte dentro de ella.
 - **Archivo:** `src/components/inbox/message-bubble.tsx` (una clase, marcada).
 
+### 7. Negrita, cursiva y tachado como en WhatsApp (20-nov-2026)
+- **Qué pasaba:** los mensajes del bot traen el formato de WhatsApp (`*negrita*`, `_cursiva_`, `~tachado~`). En el
+  teléfono del cliente se ven bien, pero en la bandeja del CRM salían los asteriscos tal cual («*Resumen de su compra*»).
+- **Qué hace:** la bandeja muestra el formato con las mismas reglas de WhatsApp (una marca por línea, junto a un espacio o
+  a la puntuación) y nunca toca los enlaces (el enlace de pago puede tener `_` o `~`).
+- **Archivos:** nuevo `src/lib/rumbo/whatsapp-format.tsx` (+ prueba). En `src/lib/inbox/linkify-text.tsx`: 1 import y el
+  texto pasa por `nodosWhatsApp(text)` (marcado).
+
 ### Pruebas
 `npx vitest run src/lib/rumbo` (8 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
