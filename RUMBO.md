@@ -52,5 +52,5 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).
 2. Cargar `RUMBO_CHECKOUT_SECRET` en el CRM (el mismo valor que `CHECKOUT_SECRETO` en Hostinger).
-3. Pegar el contexto del bot con checkout (`PEGAR_EN_CONTEXTO_DEL_NEGOCIO_CHECKOUT.txt`) cuando la plataforma tenga `CHECKOUT_ACTIVO=si`.
+3. Pegar el contexto del bot con checkout cuando la plataforma tenga `CHECKOUT_ACTIVO=si` (hecho el 18-nov; desde el 20-nov es `crm/Comportamiento AI/PEGAR_EN_CONTEXTO_DEL_NEGOCIO.txt`).
 Sin esos pasos, los cambios no hacen nada: sin `{{ENLACE_PAGO}}` en la respuesta ni `[[ENVIAR:…]]`, el bot funciona igual que antes.
