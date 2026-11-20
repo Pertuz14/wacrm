@@ -46,6 +46,13 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
   toma el anuncio de una llegada anterior. El bot recibe el contexto del anuncio como siempre (`ad-context.ts`, que
   ahora también explica la publicación compartida). Sin migración.
 
+### 6. Burbujas con enlaces largos en la tablet (20-nov-2026, archivo del original)
+- **Qué pasaba:** en la tablet (con la ficha del contacto abierta) los mensajes con el enlace de pago salían cortados a la
+  izquierda y con barra de desplazamiento: el enlace es una sola «palabra» larga y ensanchaba la burbuja por encima de
+  su 75 %.
+- **Qué hace:** la burbuja lleva `min-w-0 max-w-full`, así el enlace se parte dentro de ella.
+- **Archivo:** `src/components/inbox/message-bubble.tsx` (una clase, marcada).
+
 ### Pruebas
 `npx vitest run src/lib/rumbo` (8 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 

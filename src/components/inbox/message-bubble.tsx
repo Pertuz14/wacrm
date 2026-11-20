@@ -397,7 +397,9 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
+          // Rumbo (RUMBO.md, cambio 6): max-w-full so a long unbroken link (the payment link) wraps inside the
+          // bubble instead of widening it past its column and getting cut off on the left (seen on tablets).
+          "relative min-w-0 max-w-full rounded-2xl px-3 py-2",
           isAgent
             ? "rounded-br-md bg-primary text-primary-foreground"
             : "rounded-bl-md bg-muted text-foreground",
