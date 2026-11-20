@@ -1,7 +1,8 @@
 import https from 'node:https'
 import tls from 'node:tls'
+import { X509Certificate } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SECTIGO_DV_R36_PEM } from './bcv-ca'
+import { BCV_INTERMEDIATES } from './bcv-ca'
 import { sendTelegramText } from '@/lib/notifications/telegram'
 import {
   buildPriceVariables,
@@ -85,20 +86,95 @@ async function fetchText(url: string): Promise<string | null> {
   }
 }
 
-/** Node's roots + the intermediate the BCV fails to send (see bcv-ca.ts). */
-const BCV_CA = [...tls.rootCertificates, SECTIGO_DV_R36_PEM]
+/** Node's roots + the intermediates the BCV fails to send (see bcv-ca.ts). */
+const BCV_CA = [...tls.rootCertificates, ...BCV_INTERMEDIATES]
+
+/** An intermediate fetched from the BCV certificate itself (AIA), once it proved to chain to a trusted root. */
+let fetchedIntermediate: string | null = null
+
+/**
+ * The issuer of `leaf` as a PEM, or null. Accepted only when it is a CA, it
+ * really issued `leaf`, and it is itself signed by one of Node's bundled
+ * roots: an intermediate a correctly configured server would have sent.
+ * Pure (exported for the tests).
+ */
+export function acceptIntermediate(leaf: X509Certificate, issuerDer: Buffer, roots: readonly string[] = tls.rootCertificates): string | null {
+  let issuer: X509Certificate
+  try {
+    issuer = new X509Certificate(issuerDer)
+  } catch {
+    return null
+  }
+  if (!issuer.ca || !leaf.checkIssued(issuer) || !leaf.verify(issuer.publicKey)) return null
+  const trusted = roots.some((pem) => {
+    try {
+      const root = new X509Certificate(pem)
+      return issuer.checkIssued(root) && issuer.verify(root.publicKey)
+    } catch {
+      return false
+    }
+  })
+  return trusted ? issuer.toString() : null
+}
+
+/** "CA Issuers - URI:http://…" of a certificate's Authority Information Access, or null. */
+export function caIssuersUrl(infoAccess: string | undefined): string | null {
+  return infoAccess?.match(/CA Issuers - URI:(https?:\/\/\S+)/)?.[1] ?? null
+}
+
+/**
+ * When the BCV switches to an intermediate we don't carry (it did on
+ * 2026-11-13), read the leaf's "CA Issuers" URL, download that intermediate
+ * and keep it if it chains to a trusted root. The unverified connection is
+ * only used to read the leaf certificate; nothing else is read from it.
+ */
+async function fetchMissingIntermediate(url: string): Promise<string | null> {
+  const host = new URL(url).hostname
+  const leaf = await new Promise<X509Certificate | null>((resolve) => {
+    const socket = tls.connect({ host, port: 443, servername: host, rejectUnauthorized: false, timeout: FETCH_TIMEOUT_MS }, () => {
+      const cert = socket.getPeerX509Certificate() ?? null
+      socket.end()
+      resolve(cert)
+    })
+    socket.on('timeout', () => { socket.destroy(); resolve(null) })
+    socket.on('error', () => resolve(null))
+  })
+  const aia = leaf ? caIssuersUrl(leaf.infoAccess) : null
+  if (!leaf || !aia) return null
+  try {
+    const res = await fetch(aia, { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+    if (!res.ok) return null
+    const pem = acceptIntermediate(leaf, Buffer.from(await res.arrayBuffer()))
+    if (pem) console.warn(`[ai pricing] the BCV uses a new intermediate (${new X509Certificate(pem).subject.split('\n').pop()}): add it to bcv-ca.ts`)
+    return pem
+  } catch {
+    return null
+  }
+}
 
 /**
  * GET the BCV homepage with full TLS verification against BCV_CA. Uses
  * node:https rather than fetch because fetch has no per-request CA
- * option without an extra dependency.
+ * option without an extra dependency. If the chain can't be built (the BCV
+ * changed intermediates again), fetch the missing one once and retry.
  */
-export function fetchBcvHtml(url: string = BCV_URL): Promise<string | null> {
+export async function fetchBcvHtml(url: string = BCV_URL): Promise<string | null> {
+  const first = await getBcv(url, fetchedIntermediate ? [...BCV_CA, fetchedIntermediate] : BCV_CA)
+  if (first !== 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') return first
+  const pem = await fetchMissingIntermediate(url)
+  if (!pem) return null
+  fetchedIntermediate = pem
+  const second = await getBcv(url, [...BCV_CA, pem])
+  return second === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ? null : second
+}
+
+/** The page, null on any failure, or the marker of an incomplete chain (to fetch the missing intermediate). */
+function getBcv(url: string, ca: string[]): Promise<string | null | 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'> {
   return new Promise((resolve) => {
     const req = https.get(
       url,
       {
-        ca: BCV_CA,
+        ca,
         timeout: FETCH_TIMEOUT_MS,
         headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 (compatible; wacrm)' },
       },
@@ -118,7 +194,7 @@ export function fetchBcvHtml(url: string = BCV_URL): Promise<string | null> {
     req.on('timeout', () => req.destroy(new Error('timeout')))
     req.on('error', (err: NodeJS.ErrnoException) => {
       console.warn(`[ai pricing] could not fetch ${url}:`, err.code ?? err.message)
-      resolve(null)
+      resolve(err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ? 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' : null)
     })
   })
 }

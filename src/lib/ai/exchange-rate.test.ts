@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { mergeQuotes, parseBcvHomepage, parseDolarApi, rowToState } from './exchange-rate'
+import { X509Certificate } from 'node:crypto'
+import { acceptIntermediate, caIssuersUrl, mergeQuotes, parseBcvHomepage, parseDolarApi, rowToState } from './exchange-rate'
+import { BCV_INTERMEDIATES, SECTIGO_DV_R36_PEM } from './bcv-ca'
+import { BCV_LEAF_2026_11_PEM, SECTIGO_OV_R36_DER_BASE64 } from './bcv-ca.fixture'
 
 // Trimmed from the real bcv.org.ve homepage (2026-10-10).
 const BCV_HTML = `
@@ -108,5 +111,29 @@ describe('mergeQuotes', () => {
       saturday,
     )
     expect(merged).toMatchObject({ rate: 876.7976, rateDate: '2026-10-13' })
+  })
+})
+
+describe('the BCV intermediate (19-nov-2026: «… CA OV R36» instead of «… CA DV R36»)', () => {
+  const leaf = new X509Certificate(BCV_LEAF_2026_11_PEM)
+  const ovDer = Buffer.from(SECTIGO_OV_R36_DER_BASE64, 'base64')
+
+  it('carries the intermediate that issued the current BCV certificate', () => {
+    expect(BCV_INTERMEDIATES.some((pem) => leaf.checkIssued(new X509Certificate(pem)))).toBe(true)
+  })
+
+  it('reads the "CA Issuers" URL of the certificate', () => {
+    expect(caIssuersUrl(leaf.infoAccess)).toBe('http://crt.sectigo.com/SectigoPublicServerAuthenticationCAOVR36.crt')
+    expect(caIssuersUrl(undefined)).toBeNull()
+  })
+
+  it('accepts a fetched intermediate only if it issued the certificate and chains to a trusted root', () => {
+    expect(acceptIntermediate(leaf, ovDer)).toContain('BEGIN CERTIFICATE')
+    // The old intermediate did not issue this certificate
+    expect(acceptIntermediate(leaf, new X509Certificate(SECTIGO_DV_R36_PEM).raw)).toBeNull()
+    // Without its root among the trusted ones, it is refused
+    expect(acceptIntermediate(leaf, ovDer, [])).toBeNull()
+    // Garbage is refused
+    expect(acceptIntermediate(leaf, Buffer.from('no es un certificado'))).toBeNull()
   })
 })
