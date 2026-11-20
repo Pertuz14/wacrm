@@ -69,6 +69,30 @@ describe('capi payloads', () => {
     })
   })
 
+  it('web-ad events carry the visit fbc, fbp, IP and browser (unhashed) when the website kept them', () => {
+    const e = buildEvent(
+      {
+        eventId: 'ev4',
+        step: 'purchase',
+        occurredAt: at,
+        identity: {
+          channel: 'website', visitCode: 'k7m2qx4abc', phone: null, email: null,
+          visit: { fbc: 'fb.1.1731500000000.IwAR0abc', fbp: 'fb.1.1731500000000.123', ip: '190.1.2.3', userAgent: 'Mozilla/5.0' },
+        },
+        valueUsd: 60,
+      },
+      cfg,
+    )
+    expect(e.user_data).toEqual({
+      external_id: [sha256('k7m2qx4abc')],
+      country: [sha256('ve')],
+      fbc: 'fb.1.1731500000000.IwAR0abc',
+      fbp: 'fb.1.1731500000000.123',
+      client_ip_address: '190.1.2.3',
+      client_user_agent: 'Mozilla/5.0',
+    })
+  })
+
   it('normalizes Venezuelan phones', () => {
     expect(normalizePhone('+58 412 123 4567')).toBe('584121234567')
     expect(normalizePhone('04121234567')).toBe('584121234567')

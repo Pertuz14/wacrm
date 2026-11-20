@@ -10,7 +10,9 @@ import {
   type CapiConfig,
   type CapiIdentity,
   type CapiStep,
+  type VisitData,
 } from './capi'
+import { fetchVisitData } from './visit-data'
 
 // ============================================================
 // The outbox of migration 075 (capi_events): turn each queued row into a
@@ -124,7 +126,7 @@ type Outcome =
 export async function resolveRow(
   db: SupabaseClient,
   row: CapiRow,
-  ctx: { cfg: CapiConfig; stages: Map<string, StageKind>; ids: Ids },
+  ctx: { cfg: CapiConfig; stages: Map<string, StageKind>; ids: Ids; visitData?: (visitCode: string) => Promise<VisitData | null> },
 ): Promise<Outcome> {
   if (!row.contact_id) return { kind: 'skip', reason: 'Sin contacto' }
 
@@ -166,7 +168,9 @@ export async function resolveRow(
   } else if (touch.visit_code) {
     const { data: c } = await db.from('contacts').select('phone, email').eq('id', row.contact_id).maybeSingle()
     const contact = (c ?? {}) as { phone?: string | null; email?: string | null }
-    identity = { channel: 'website', visitCode: touch.visit_code, phone: contact.phone ?? null, email: contact.email ?? null }
+    // fbc, fbp, IP and browser of that visit, kept by the website: they let Meta tie this event to the ad click
+    const visit = ctx.visitData ? await ctx.visitData(touch.visit_code).catch(() => null) : null
+    identity = { channel: 'website', visitCode: touch.visit_code, phone: contact.phone ?? null, email: contact.email ?? null, visit }
   }
   if (!identity) return { kind: 'skip', reason: 'No llegó por un anuncio' }
 
@@ -214,7 +218,7 @@ export async function resolveRow(
 export async function flushCapiQueue(
   db: SupabaseClient,
   cfg: CapiConfig,
-  opts: { limit?: number; now?: Date; fetcher?: typeof fetch } = {},
+  opts: { limit?: number; now?: Date; fetcher?: typeof fetch; visitData?: (visitCode: string) => Promise<VisitData | null> } = {},
 ): Promise<FlushSummary> {
   const summary: FlushSummary = { sent: 0, skipped: 0, failed: 0, expired: 0, waiting: 0 }
   const now = opts.now ?? new Date()
@@ -252,7 +256,7 @@ export async function flushCapiQueue(
         ctx = { stages: await stageMap(db, row.account_id), ids: await accountIds(db, row.account_id) }
         perAccount.set(row.account_id, ctx)
       }
-      const outcome = await resolveRow(db, row, { cfg, ...ctx })
+      const outcome = await resolveRow(db, row, { cfg, ...ctx, visitData: opts.visitData ?? ((code) => fetchVisitData(code)) })
 
       if (outcome.kind === 'skip') {
         await db

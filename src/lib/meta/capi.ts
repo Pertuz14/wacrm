@@ -13,7 +13,8 @@ import { createHash } from 'node:crypto'
 //   * Ad → rumbouni.com → WhatsApp: the website already told Meta about the
 //     visit (pixel + server "Contact", with the visit code as external_id);
 //     we send the later steps to the website's dataset with
-//     action_source "chat", the same external_id and the hashed phone.
+//     action_source "chat", the same external_id and the hashed phone, plus
+//     the visit's fbc, fbp, IP and browser that the website kept for us.
 // Reference: developers.facebook.com/documentation/ads-commerce/conversions-api/business-messaging
 // ============================================================
 
@@ -97,7 +98,19 @@ export function normalizeEmail(email: string | null | undefined): string | null 
 export type CapiIdentity =
   | { channel: 'whatsapp'; wabaId: string; ctwaClid: string }
   | { channel: 'instagram'; igAccountId: string; igsid: string }
-  | { channel: 'website'; visitCode: string; phone: string | null; email: string | null }
+  | { channel: 'website'; visitCode: string; phone: string | null; email: string | null; visit?: VisitData | null }
+
+/**
+ * What the website saw on the visit (rumbouni.com keeps it next to the visit code for 90 days and hands it
+ * over through POST /api/crm/meta-visita; see visit-data.ts). With it Meta can tie a purchase reported here to
+ * the ad click: fbc is the click id, fbp the pixel's browser id. Never asked to the customer.
+ */
+export interface VisitData {
+  fbc?: string | null
+  fbp?: string | null
+  ip?: string | null
+  userAgent?: string | null
+}
 
 export interface CapiEventInput {
   eventId: string
@@ -134,11 +147,17 @@ export function buildEvent(input: CapiEventInput, cfg: Pick<CapiConfig, 'pageId'
     event.action_source = 'chat'
     const phone = normalizePhone(identity.phone)
     const email = normalizeEmail(identity.email)
+    const v = identity.visit ?? {}
     event.user_data = {
       external_id: [sha256(identity.visitCode)],
       ...(phone ? { ph: [sha256(phone)] } : {}),
       ...(email ? { em: [sha256(email)] } : {}),
       country: [sha256('ve')],
+      // Not hashed: Meta wants these as they are
+      ...(v.fbc ? { fbc: v.fbc } : {}),
+      ...(v.fbp ? { fbp: v.fbp } : {}),
+      ...(v.ip ? { client_ip_address: v.ip } : {}),
+      ...(v.userAgent ? { client_user_agent: v.userAgent } : {}),
     }
   }
 

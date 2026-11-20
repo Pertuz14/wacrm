@@ -187,9 +187,13 @@ describe('flushCapiQueue', () => {
       },
     ]
     t.capi_events.push(queue({ id: 'q1', stage_id: 's-ver' }))
-    await flushCapiQueue(memoryDb(t), cfg, { now, fetcher })
+    const asked: string[] = []
+    const visitData = async (code: string) => { asked.push(code); return { fbc: 'fb.1.1731500000000.IwAR0abc', ip: '190.1.2.3' } }
+    await flushCapiQueue(memoryDb(t), cfg, { now, fetcher, visitData })
     expect(sent[0].url).toContain('/px/events')
     expect(sent[0].body.data[0]).toMatchObject({ event_name: 'InitiateCheckout', action_source: 'chat' })
+    expect(asked).toEqual(['abcdefgh23'])
+    expect(sent[0].body.data[0].user_data).toMatchObject({ fbc: 'fb.1.1731500000000.IwAR0abc', client_ip_address: '190.1.2.3' })
 
     const t2 = baseTables()
     t2.lead_sources = [
