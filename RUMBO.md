@@ -61,8 +61,16 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Archivos:** nuevo `src/lib/rumbo/whatsapp-format.tsx` (+ prueba). En `src/lib/inbox/linkify-text.tsx`: 1 import y el
   texto pasa por `nodosWhatsApp(text)` (marcado).
 
+### 8. Instagram sin asteriscos (20-nov-2026)
+- **Qué pasaba:** Instagram no muestra negritas y el bot no siempre quitaba los asteriscos que pide la nota de
+  Instagram: llegaban tal cual («*Arquitectura* e *Ingeniería*»).
+- **Qué hace:** antes de enviar un texto por Instagram (bot, bandeja y automatizaciones) se quitan las marcas de
+  WhatsApp con las mismas reglas del cambio 7; los enlaces no se tocan. En la base queda el mensaje con su formato.
+- **Archivos:** `textoSinFormato` en `src/lib/rumbo/whatsapp-format.tsx` (+ prueba). En `src/lib/instagram/send.ts`:
+  1 import y el texto pasa por `textoSinFormato` (marcado).
+
 ### Pruebas
-`npx vitest run src/lib/rumbo` (8 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
+`npx vitest run src/lib/rumbo` (14 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).

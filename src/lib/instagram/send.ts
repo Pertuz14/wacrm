@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadInstagramConfig } from './config'
 import { INSTAGRAM_TEXT_MAX, sendMedia, sendText, senderAction, type InstagramMediaKind } from './api'
+import { textoSinFormato } from '@/lib/rumbo/whatsapp-format'
 
 export type Channel = 'whatsapp' | 'instagram'
 
@@ -76,7 +77,8 @@ export async function sendInstagramToContact(db: SupabaseClient, args: SendArgs)
   const recipientId = await recipientOf(db, args.accountId, args.contactId)
 
   if (args.kind === 'text') {
-    const parts = splitForInstagram(args.text ?? '')
+    // Rumbo (RUMBO.md, cambio 8): Instagram shows no bold, so the WhatsApp markers go
+    const parts = splitForInstagram(textoSinFormato(args.text ?? ''))
     if (!parts.length) throw new InstagramSendError('bad_request', 'Empty message')
     let last = ''
     for (const [i, part] of parts.entries()) {

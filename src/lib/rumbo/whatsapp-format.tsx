@@ -54,6 +54,14 @@ export function piezasWhatsApp(texto: string): Pieza[] {
 }
 
 /**
+ * The same text without the markers (RUMBO.md, cambio 8): Instagram shows no
+ * bold, so «*Guía de estudio:*» arrived with its asterisks. Links stay intact.
+ */
+export function textoSinFormato(texto: string): string {
+  return piezasWhatsApp(texto).map((p) => p.texto).join('')
+}
+
+/**
  * The text as React nodes (plain strings and <strong>/<em>/<s> with string
  * children), so <Linkify> can still find the links inside them.
  */

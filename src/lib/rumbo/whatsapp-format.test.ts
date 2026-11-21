@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { piezasWhatsApp } from './whatsapp-format'
+import { piezasWhatsApp, textoSinFormato } from './whatsapp-format'
 import { LinkifyText } from '@/lib/inbox/linkify-text'
 
 const plano = (texto: string) =>
@@ -41,5 +41,13 @@ describe('piezasWhatsApp (formato de WhatsApp en la bandeja)', () => {
     expect(plano('*abre\ncierra*')).toBe('[*abre\ncierra*]') // en dos líneas
     expect(plano('**')).toBe('[**]')
     expect(plano('')).toBe('')
+  })
+
+  it('para Instagram: el mismo texto sin las marcas y el enlace intacto', () => {
+    expect(textoSinFormato('Perfecto, *Arquitectura* e *Ingeniería* corresponden al área de *Ciencia y Tecnología*. 🙌'))
+      .toBe('Perfecto, Arquitectura e Ingeniería corresponden al área de Ciencia y Tecnología. 🙌')
+    expect(textoSinFormato('📘 *Guía de estudio:* conceptos\nhttps://rumbouni.com/pagar/Zg_R7~Dyn_wS7*Rb*cd'))
+      .toBe('📘 Guía de estudio: conceptos\nhttps://rumbouni.com/pagar/Zg_R7~Dyn_wS7*Rb*cd')
+    expect(textoSinFormato('2 * 3 * 4')).toBe('2 * 3 * 4')
   })
 })
