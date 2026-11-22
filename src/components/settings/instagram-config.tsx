@@ -12,8 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCan } from '@/hooks/use-can';
 import { SettingsPanelHead } from './settings-panel-head';
-// Rumbo (RUMBO.md, cambio 9): subir la nota de la IA desde un archivo y sus versiones anteriores
-import { BotTextTools } from '@/components/rumbo/bot-text-tools';
+// Rumbo (RUMBO.md, cambios 9 y 10): campo plegable, subir la nota de la IA desde un archivo y sus versiones anteriores
+import { BotTextBox } from '@/components/rumbo/bot-text-box';
 
 interface InstagramState {
   connected: boolean;
@@ -242,9 +242,8 @@ export function InstagramConfig() {
               <CardDescription>{t('aiDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Textarea rows={4} value={note} placeholder={state.defaultAiNote} onChange={(e) => setNote(e.target.value)} disabled={!isAdmin} />
-              {/* Rumbo (RUMBO.md, cambio 9) */}
-              <BotTextTools channel="instagram" onText={setNote} disabled={!isAdmin} />
+              {/* Rumbo (RUMBO.md, cambios 9 y 10): antes un <Textarea rows={4}> con los mismos datos */}
+              <BotTextBox channel="instagram" value={note} placeholder={state.defaultAiNote} onChange={setNote} disabled={!isAdmin} />
               <p className="text-xs text-muted-foreground">{t('aiDefaultHint')}</p>
               {isAdmin && (
                 <Button size="sm" onClick={() => save('note')} disabled={busy !== null}>

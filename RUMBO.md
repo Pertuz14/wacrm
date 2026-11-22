@@ -84,6 +84,17 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
   miembros, función y disparadores `rumbo_*`, y `redeem_invitation` de la 075 con la tabla nueva en su lista). Aplicada el 22-nov.
   Al traer cambios del original que redefinan `redeem_invitation`, conservar las líneas de `capi_events` y `rumbo_bot_versions`.
 
+### 10. El campo del texto del bot, plegable (22-nov-2026)
+- **Qué pasaba:** el campo del original crece con todo su contenido (`field-sizing-content`) y el texto del bot pasa de
+  120 000 caracteres: para llegar a los ajustes de abajo había que recorrerlo entero.
+- **Qué hace:** con más de 600 caracteres, el campo sale plegado: un resumen (cuántos caracteres y cómo empieza) con
+  «Ver y editar»; abierto, el texto se desplaza dentro de una caja de 60 % de la pantalla y se puede volver a ocultar.
+  Un texto corto o vacío se ve como siempre. Mismos datos y mismo «Guardar».
+- **Archivos:** nuevo `src/components/rumbo/bot-text-box.tsx` (incluye las herramientas del cambio 9). En
+  `ai-config.tsx` el `<Textarea id="ai-prompt">` pasa a `<BotTextBox>` (y se quitó su import, que quedó sin uso); en
+  `instagram-config.tsx` el `<Textarea>` de la nota de la IA pasa a `<BotTextBox>` (marcados). Al traer cambios del
+  original en esas dos pantallas, conservar `<BotTextBox>` en lugar del `<Textarea>`.
+
 ### Pruebas
 `npx vitest run src/lib/rumbo` (17 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 

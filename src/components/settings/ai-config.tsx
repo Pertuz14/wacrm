@@ -8,7 +8,6 @@ import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
   Card,
@@ -41,8 +40,8 @@ import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
 import { invalidateAiAccountStatus } from '@/lib/ai/account-status-cache';
-// Rumbo (RUMBO.md, cambio 9): subir el texto del bot desde un archivo y sus versiones anteriores
-import { BotTextTools } from '@/components/rumbo/bot-text-tools';
+// Rumbo (RUMBO.md, cambios 9 y 10): campo plegable, subir el texto del bot desde un archivo y sus versiones anteriores
+import { BotTextBox } from '@/components/rumbo/bot-text-box';
 
 const MASKED_KEY = '••••••••••••••••';
 
@@ -533,16 +532,15 @@ export function AiConfig() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="ai-prompt">{t('businessContext')}</Label>
-              <Textarea
+              {/* Rumbo (RUMBO.md, cambios 9 y 10): antes un <Textarea id="ai-prompt" rows={5}> con los mismos datos */}
+              <BotTextBox
+                channel="whatsapp"
                 id="ai-prompt"
                 value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
+                onChange={setSystemPrompt}
                 placeholder={t('promptPlaceholder')}
-                rows={5}
                 disabled={disabled}
               />
-              {/* Rumbo (RUMBO.md, cambio 9) */}
-              <BotTextTools channel="whatsapp" onText={setSystemPrompt} disabled={disabled} />
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
