@@ -69,8 +69,23 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Archivos:** `textoSinFormato` en `src/lib/rumbo/whatsapp-format.tsx` (+ prueba). En `src/lib/instagram/send.ts`:
   1 import y el texto pasa por `textoSinFormato` (marcado).
 
+### 9. Subir el texto del bot desde un archivo, con historial (22-nov-2026)
+- **Por qué:** el contexto del bot (unos 120 000 caracteres) se pegaba a mano en Agentes › Contexto del negocio y en la nota
+  de Instagram, sin forma de volver a la versión anterior si algo salía mal. Gabriel pidió poder subir el archivo y volver atrás.
+- **Qué hace:** debajo de esos dos campos, «Subir archivo» lee el .txt en el navegador, revisa que sea el de ese canal
+  (el de WhatsApp lleva `<base_conocimiento>`; la nota de Instagram no) y lo pone en el campo; se aplica con el «Guardar» de
+  siempre (misma ruta y permisos del original). «Versiones anteriores» lista las últimas 30 de cada canal, con «Descargar» y
+  «Usar esta». Las versiones las guarda un disparador en la base al cambiar el texto, venga de la pantalla, de la API o de
+  una actualización directa (Claude sube los cambios del bot así).
+- **Archivos propios:** `src/lib/rumbo/bot-text.ts` (+ prueba), `src/components/rumbo/bot-text-tools.tsx`,
+  `src/app/api/rumbo/bot-versions/route.ts` (solo lectura, sesión y cuenta de quien pregunta).
+  En `src/components/settings/ai-config.tsx` e `instagram-config.tsx`: 1 import y 1 línea cada uno (marcados).
+- **Migración:** `supabase/migrations/076_rumbo_bot_versions.sql` (tabla `rumbo_bot_versions` con RLS de solo lectura para
+  miembros, función y disparadores `rumbo_*`, y `redeem_invitation` de la 075 con la tabla nueva en su lista). Aplicada el 22-nov.
+  Al traer cambios del original que redefinan `redeem_invitation`, conservar las líneas de `capi_events` y `rumbo_bot_versions`.
+
 ### Pruebas
-`npx vitest run src/lib/rumbo` (14 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
+`npx vitest run src/lib/rumbo` (17 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).

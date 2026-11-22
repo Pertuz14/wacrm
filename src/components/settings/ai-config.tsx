@@ -41,6 +41,8 @@ import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
 import { invalidateAiAccountStatus } from '@/lib/ai/account-status-cache';
+// Rumbo (RUMBO.md, cambio 9): subir el texto del bot desde un archivo y sus versiones anteriores
+import { BotTextTools } from '@/components/rumbo/bot-text-tools';
 
 const MASKED_KEY = '••••••••••••••••';
 
@@ -539,6 +541,8 @@ export function AiConfig() {
                 rows={5}
                 disabled={disabled}
               />
+              {/* Rumbo (RUMBO.md, cambio 9) */}
+              <BotTextTools channel="whatsapp" onText={setSystemPrompt} disabled={disabled} />
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
