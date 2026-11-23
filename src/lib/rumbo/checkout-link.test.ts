@@ -1,6 +1,6 @@
 // Rumbo a la U — local change (see RUMBO.md).
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fillLink, LINK_FALLBACK, parsePedido, requestedMedia, withCheckoutLink } from './checkout-link'
+import { ensureLinkSlot, fillLink, LINK_BLOCK, LINK_FALLBACK, parsePedido, requestedMedia, withCheckoutLink } from './checkout-link'
 import { parseBotOutput } from '@/lib/ai/bot-output'
 
 vi.mock('@/lib/notifications/telegram', () => ({
@@ -54,6 +54,22 @@ describe('Rumbo checkout link', () => {
     const out = await withCheckoutLink(db as never, { accountId: 'a', conversationId: 'c', contactId: 'k' }, RAW, parseBotOutput(RAW).messages, 'whatsapp')
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(out.join('\n')).toContain(LINK_FALLBACK)
+  })
+
+  it('safety net: an order without the link placeholder still gets the link, in a message of its own', async () => {
+    const soloAnuncio = 'Perfecto 🙌 Le preparo su enlace de pago privado.\n[[PEDIDO|programa=simadi|producto=Paquete completo|plan=contado|area=Salud y Agro y Mar]]'
+    const parts = parseBotOutput(soloAnuncio).messages
+    expect(ensureLinkSlot(soloAnuncio, parts)).toEqual([...parts, LINK_BLOCK])
+    expect(ensureLinkSlot('Hola, ¿en qué le ayudo?', ['Hola, ¿en qué le ayudo?'])).toEqual(['Hola, ¿en qué le ayudo?'])
+    expect(ensureLinkSlot(RAW, parseBotOutput(RAW).messages)).toEqual(parseBotOutput(RAW).messages)
+
+    process.env.RUMBO_CHECKOUT_SECRET = 'x'.repeat(40)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ url: 'https://rumbouni.com/pagar/TOKEN', vence_texto: 'martes 24 de noviembre' }), { status: 201 })))
+    const db = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { phone: null, name: 'Lourdes' } }) }) }) }) }) }
+    const out = await withCheckoutLink(db as never, { accountId: 'a', conversationId: 'c', contactId: 'k' }, soloAnuncio, parts, 'instagram')
+    expect(out).toHaveLength(2)
+    expect(out[1]).toContain('https://rumbouni.com/pagar/TOKEN')
+    expect(out[1]).toContain('martes 24 de noviembre')
   })
 
   it('with the secret it sends the order (not an amount) and uses the returned link', async () => {

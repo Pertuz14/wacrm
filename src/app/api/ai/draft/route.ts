@@ -11,7 +11,7 @@ import { logAiUsage } from '@/lib/ai/usage'
 import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { loadPromptVariables } from '@/lib/ai/exchange-rate'
 import { applyTemplateVariables } from '@/lib/ai/pricing'
-import { parseBotOutput } from '@/lib/ai/bot-output'
+import { draftWithLink, transcriptForDraft } from '@/lib/rumbo/borrador'
 import { AiError } from '@/lib/ai/types'
 import { getT } from '@/lib/i18n/translate'
 
@@ -121,7 +121,8 @@ export async function POST(request: Request) {
       variables,
     )
 
-    const { text, usage } = await generateReply({ config, systemPrompt, messages })
+    // Rumbo (RUMBO.md, cambio 11): never end the transcript with our own message
+    const { text, usage } = await generateReply({ config, systemPrompt, messages: transcriptForDraft(messages) })
 
     // Record spend on the account's BYO key. Best-effort + via the
     // service role (the log has no `authenticated` INSERT policy). This
@@ -145,7 +146,8 @@ export async function POST(request: Request) {
 
     // A draft lands in the composer as one editable text: join the parts
     // and drop control tags (the agent decides what to send).
-    return NextResponse.json({ draft: parseBotOutput(text).messages.join('\n\n') })
+    // Rumbo (RUMBO.md, cambio 11): the draft also gets the real payment link
+    return NextResponse.json({ draft: await draftWithLink(supabaseAdmin(), accountId, conversationId, text) })
   } catch (err) {
     if (err instanceof AiError) {
       return NextResponse.json(

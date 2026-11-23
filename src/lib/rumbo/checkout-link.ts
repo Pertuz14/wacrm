@@ -57,6 +57,20 @@ export function requestedMedia(raw: string): string[] {
   return [...new Set(keys)].slice(0, 2)
 }
 
+/** The link lines added when the bot wrote the order but forgot `{{ENLACE_PAGO}}` (RUMBO.md, cambio 11). */
+export const LINK_BLOCK = `👇 *Su enlace de pago privado:*\n${LINK_PLACEHOLDER}\n🔒 El enlace es solo para usted y vale hasta el *${VALID_UNTIL_PLACEHOLDER}*.`
+
+/**
+ * Safety net (22-nov: the bot answered «Le preparo su enlace…», wrote the
+ * order line and no placeholder, so no link was ever created): with an
+ * order and no placeholder, the link goes in a message of its own at the end.
+ */
+export function ensureLinkSlot(raw: string, parts: string[]): string[] {
+  if (parts.some((p) => p.includes(LINK_PLACEHOLDER))) return parts
+  if (!parsePedido(raw)) return parts
+  return [...parts, LINK_BLOCK]
+}
+
 /** Replace the placeholders; when there is no link, the whole line that held it becomes the fallback. */
 export function fillLink(parts: string[], link: { url: string; validUntil: string } | null): string[] {
   return parts.map((part) => {
@@ -108,6 +122,7 @@ export async function withCheckoutLink(
   parts: string[],
   channel: string | null,
 ): Promise<string[]> {
+  parts = ensureLinkSlot(raw, parts)
   if (!parts.some((p) => p.includes(LINK_PLACEHOLDER) || p.includes(VALID_UNTIL_PLACEHOLDER))) return parts
   try {
     const pedido = parsePedido(raw) ?? {}

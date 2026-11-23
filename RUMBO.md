@@ -95,8 +95,21 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
   `instagram-config.tsx` el `<Textarea>` de la nota de la IA pasa a `<BotTextBox>` (marcados). Al traer cambios del
   original en esas dos pantallas, conservar `<BotTextBox>` en lugar del `<Textarea>`.
 
+### 11. La estrellita (borrador con IA) y el enlace que el bot olvidó (22-nov-2026)
+- **Qué pasaba:** (1) la estrellita ✨ daba «OpenAI-compatible provider API error (400)» cuando lo último del chat era
+  nuestro (del bot o de un agente): el historial terminaba en un turno del asistente y los modelos Claude no lo aceptan.
+  (2) Aunque funcionara, el borrador nunca creaba el enlace de pago (solo lo hacía el bot automático). (3) En Instagram el
+  bot respondió «Le preparo su enlace…» con la línea `[[PEDIDO|…]]` pero sin `{{ENLACE_PAGO}}`, y el enlace no se creó.
+- **Qué hace:** (1) si el historial termina en un mensaje nuestro, el borrador agrega una nota interna para que la IA siga
+  donde quedó (`transcriptForDraft`); (2) el borrador pasa por el mismo `withCheckoutLink` que el bot (`draftWithLink`):
+  si trae el enlace, se crea en la plataforma y llega listo al compositor; (3) red de seguridad en `withCheckoutLink`
+  (`ensureLinkSlot`): una respuesta con pedido y sin el espacio del enlace recibe al final un mensaje con el enlace.
+- **Archivos:** nuevo `src/lib/rumbo/borrador.ts` (+ prueba); `src/lib/rumbo/checkout-link.ts` (+ prueba). En
+  `src/app/api/ai/draft/route.ts` (del original): 1 import y 2 líneas marcadas (el historial y el texto del borrador).
+  Al traer cambios del original en esa ruta, conservar `transcriptForDraft(messages)` y `draftWithLink(...)`.
+
 ### Pruebas
-`npx vitest run src/lib/rumbo` (17 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
+`npx vitest run src/lib/rumbo` (21 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).
