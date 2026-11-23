@@ -23,6 +23,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { platformUrl } from '@/lib/ai/payment-alerts'
 import { sendTelegramText, isTelegramConfigured } from '@/lib/notifications/telegram'
+import { conversationSchoolRef } from '@/lib/leads/school-ref'
 
 export const LINK_PLACEHOLDER = '{{ENLACE_PAGO}}'
 export const VALID_UNTIL_PLACEHOLDER = '{{ENLACE_PAGO_VENCE}}'
@@ -127,8 +128,12 @@ export async function withCheckoutLink(
   try {
     const pedido = parsePedido(raw) ?? {}
     const contact = await contactOf(db, target)
+    // Allied school (RUMBO.md, cambio 13): the invisible code of the school link, read from the customer's first
+    // messages. The platform checks it and charges the plan A price (10 % off); an unknown code changes nothing.
+    const colegio = await conversationSchoolRef(db, target.conversationId)
     const r = await callPlatform('/api/crm/checkout', {
       ...pedido,
+      ...(colegio ? { colegio } : {}),
       phone: contact.phone,
       name: contact.name,
       contact_id: target.contactId,

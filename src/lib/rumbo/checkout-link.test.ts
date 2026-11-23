@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ensureLinkSlot, fillLink, LINK_BLOCK, LINK_FALLBACK, parsePedido, requestedMedia, withCheckoutLink } from './checkout-link'
 import { parseBotOutput } from '@/lib/ai/bot-output'
+import { encodeMark } from '@/lib/leads/invisible-mark'
 
 vi.mock('@/lib/notifications/telegram', () => ({
   isTelegramConfigured: () => false,
@@ -85,5 +86,20 @@ describe('Rumbo checkout link', () => {
     const sent = JSON.parse(String(init.body))
     expect(sent).toMatchObject({ programa: 'SIMADI', plan: '2 partes', phone: '+584121234567', channel: 'whatsapp' })
     expect(sent).not.toHaveProperty('monto')
+  })
+
+  it('sends the allied-school code read from the first customer message (plan A, 23-nov)', async () => {
+    process.env.RUMBO_CHECKOUT_SECRET = 'x'.repeat(40)
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ url: 'https://rumbouni.com/pagar/TOKEN', vence_texto: 'viernes 27 de noviembre' }), { status: 201 }))
+    vi.stubGlobal('fetch', fetchSpy)
+    const first = `Hola, quiero información (vi la web)${encodeMark('k7m2qx4', 'school')}`
+    const contact = { maybeSingle: async () => ({ data: { phone: '584121234567', name: 'Ana' } }) }
+    const messages = { order: () => ({ limit: async () => ({ data: [{ content_text: first }], error: null }) }) }
+    const db = {
+      from: (table: string) => ({ select: () => ({ eq: () => ({ eq: () => (table === 'messages' ? messages : contact) }) }) }),
+    }
+    await withCheckoutLink(db as never, { accountId: 'a', conversationId: 'c', contactId: 'k' }, RAW, parseBotOutput(RAW).messages, 'whatsapp')
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit]
+    expect(JSON.parse(String(init.body))).toMatchObject({ programa: 'SIMADI', colegio: 'k7m2qx4' })
   })
 })

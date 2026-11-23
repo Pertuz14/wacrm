@@ -118,6 +118,11 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Archivos:** nuevo `src/lib/rumbo/instagram-echo.ts` (+ prueba). En `src/app/api/instagram/webhook/route.ts`: 1 import
   y 1 línea en el bloque del eco (marcado).
 
+### 13. El enlace de pago lleva el colegio aliado (23-nov-2026, archivo propio)
+- **Por qué:** desde el 23-nov, en el plan A la familia que llega con el enlace de un colegio paga 10 % menos. El enlace de pago lo calcula la plataforma, que no ve el chat; el código del colegio viaja invisible en los primeros mensajes de la persona.
+- **Qué hace:** al crear el enlace de pago, `withCheckoutLink` lee ese código con `conversationSchoolRef` (ya existía en `src/lib/leads/school-ref.ts`) y lo manda como `colegio`. La plataforma lo valida, cobra con el 10 % y atribuye la venta al colegio. Si no hay código, se manda lo mismo de siempre.
+- **Archivos:** `src/lib/rumbo/checkout-link.ts` (+ prueba en `checkout-link.test.ts`). Sin migración.
+
 ### Pruebas
 `npx vitest run src/lib/rumbo` (24 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
