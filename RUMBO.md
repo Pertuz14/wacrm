@@ -108,8 +108,18 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
   `src/app/api/ai/draft/route.ts` (del original): 1 import y 2 líneas marcadas (el historial y el texto del borrador).
   Al traer cambios del original en esa ruta, conservar `transcriptForDraft(messages)` y `draftWithLink(...)`.
 
+### 12. Instagram: un mensaje largo ya no aparece dos veces en la bandeja (22-nov-2026)
+- **Qué pasaba:** Instagram acepta hasta 1000 caracteres; un mensaje más largo sale en varias partes y la fila guarda solo
+  el id de la última. Los ecos de las partes anteriores no se reconocían y la bandeja los mostraba como mensajes nuevos
+  (el enlace de pago de una clienta apareció dos veces, una sin negritas). La clienta siempre lo recibió una sola vez.
+- **Qué hace:** antes de guardar un eco, se mira si es una de las partes (partidas igual que al enviar, sin las marcas de
+  WhatsApp) de un mensaje nuestro de los últimos 3 minutos en esa conversación; si lo es, no se guarda. Un mensaje
+  escrito desde la app de Instagram nunca se esconde: solo cuentan las partes exactas de un mensaje que se partió.
+- **Archivos:** nuevo `src/lib/rumbo/instagram-echo.ts` (+ prueba). En `src/app/api/instagram/webhook/route.ts`: 1 import
+  y 1 línea en el bloque del eco (marcado).
+
 ### Pruebas
-`npx vitest run src/lib/rumbo` (21 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
+`npx vitest run src/lib/rumbo` (24 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).

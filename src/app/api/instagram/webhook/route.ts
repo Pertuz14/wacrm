@@ -19,6 +19,7 @@ import {
 } from '@/lib/instagram/config'
 import { getUserProfile, replyToComment, sendPrivateReply } from '@/lib/instagram/api'
 import { matchCommentKeyword, parseInstagramWebhook, type IgEvent, type IgWebhookBody } from '@/lib/instagram/webhook-parse'
+import { ecoDeEnvioPartido } from '@/lib/rumbo/instagram-echo'
 
 // Instagram Direct → inbox. Mirrors /api/whatsapp/webhook: verify the
 // signature, ack Meta at once, and process inside `after()` so the work
@@ -230,6 +231,8 @@ async function handleMessage(config: InstagramConfig, ev: Extract<IgEvent, { kin
     // head start, then store only what was sent from the Instagram app itself.
     await sleep(5000)
     if (await lookupInternalId(ev.mid, conversation.id)) return
+    // Rumbo (RUMBO.md, cambio 12): an earlier part of a long message the CRM just sent
+    if (await ecoDeEnvioPartido(db(), conversation.id, text, ev.timestamp)) return
     const { error } = await db()
       .from('messages')
       .upsert(
