@@ -132,8 +132,25 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Archivos:** nuevo `src/lib/rumbo/instagram-sticker.ts` (+ prueba). En `src/lib/instagram/webhook-parse.ts`: 1 import y
   1 línea (la etiqueta del adjunto, marcada).
 
+### 15. Dos mensajes en el mismo segundo: el bot responde una sola vez (25-nov-2026)
+- **Qué pasaba:** WhatsApp marca la hora al segundo. Cuando alguien manda dos mensajes a la vez (23-nov: «Hola, quiero
+  información…» y el enlace de un reel), las dos filas quedan con la misma hora; ninguna veía a la otra como «más nueva»
+  y el bot mandó dos veces la misma respuesta.
+- **Qué hace:** entre mensajes del mismo segundo responde solo el de id mayor, que ve todos en el historial.
+- **Archivos:** nuevo `src/lib/rumbo/mensajes-juntos.ts` (+ prueba en `mensajes-juntos.test.ts`). En
+  `src/lib/ai/auto-reply.ts` (del original): 1 import y, en `hasNewerDispatchingInbound`, se lee también el `id` y hay
+  1 línea marcada. Al traer cambios del original en ese archivo, conservarlas.
+
+### 16. Mensaje automático por comentario: una vez por persona (25-nov-2026)
+- **Qué pasaba:** el mensaje automático se reclamaba por comentario; una persona que comentó dos publicaciones con 6 minutos
+  de diferencia (24-nov), mientras ya conversaba con el bot, lo recibió dos veces.
+- **Qué hace:** después de reclamar el comentario, no se manda el mensaje si esa persona ya recibió uno en las últimas 24 horas
+  (por otro comentario) o si nos escribió por DM en las últimas 24 horas. Ante cualquier error, se manda como antes.
+- **Archivos:** nuevo `src/lib/rumbo/comentario-dm.ts` (prueba en `mensajes-juntos.test.ts`). En
+  `src/app/api/instagram/webhook/route.ts`: 1 import y 1 línea en `handleComment` (marcada).
+
 ### Pruebas
-`npx vitest run src/lib/rumbo` (27 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
+`npx vitest run src/lib/rumbo` (las de `src/lib/rumbo`) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).

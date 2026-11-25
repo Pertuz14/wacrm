@@ -14,6 +14,7 @@ import { alertHandoff, alertPaymentToVerify } from './bot-alerts'
 import { syncDealForTurn } from './pipeline-sync'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
+import { otroDelMismoSegundoResponde } from '@/lib/rumbo/mensajes-juntos'
 import {
   engineSendText,
   loadAccountMetaCredentials,
@@ -334,12 +335,15 @@ async function hasNewerDispatchingInbound(
   try {
     const { data: own } = await db
       .from('messages')
-      .select('created_at')
+      .select('id, created_at')
       .eq('conversation_id', conversationId)
       .eq('message_id', inboundMessageId)
       .limit(1)
-    const createdAt = (own as { created_at: string }[] | null)?.[0]?.created_at
-    if (!createdAt) return false
+    const ownRow = (own as { id: string; created_at: string }[] | null)?.[0]
+    const createdAt = ownRow?.created_at
+    if (!ownRow || !createdAt) return false
+    // Rumbo (RUMBO.md, cambio 15): two messages in the same second — only one answers.
+    if (await otroDelMismoSegundoResponde(db, conversationId, ownRow, DISPATCHING_CONTENT_TYPES)) return true
     const { data: newer } = await db
       .from('messages')
       .select('id')

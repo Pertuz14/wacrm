@@ -20,6 +20,7 @@ import {
 import { getUserProfile, replyToComment, sendPrivateReply } from '@/lib/instagram/api'
 import { matchCommentKeyword, parseInstagramWebhook, type IgEvent, type IgWebhookBody } from '@/lib/instagram/webhook-parse'
 import { ecoDeEnvioPartido } from '@/lib/rumbo/instagram-echo'
+import { omitirDmDeComentario } from '@/lib/rumbo/comentario-dm'
 
 // Instagram Direct → inbox. Mirrors /api/whatsapp/webhook: verify the
 // signature, ack Meta at once, and process inside `after()` so the work
@@ -383,6 +384,8 @@ async function handleComment(config: InstagramConfig, ev: Extract<IgEvent, { kin
     if (!isUniqueViolation(claimError)) console.error('[instagram webhook] comment claim failed:', claimError.message)
     return
   }
+  // Rumbo (RUMBO.md, cambio 16): once per person per 24 h, and not while already chatting.
+  if (await omitirDmDeComentario(db(), config.accountId, ev.fromId, ev.commentId)) return
 
   const dmText = config.commentReplyText.trim()
   const sent = await sendPrivateReply({ token: config.accessToken, commentId: ev.commentId, text: dmText })
