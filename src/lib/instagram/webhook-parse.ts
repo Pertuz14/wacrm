@@ -8,6 +8,7 @@
 // ============================================================
 
 import type { IgReferral } from '@/lib/leads/source'
+import { stickerLabel } from '@/lib/rumbo/instagram-sticker'
 
 export interface IgAttachment {
   type: string
@@ -169,7 +170,8 @@ export function parseInstagramWebhook(body: IgWebhookBody): IgEvent[] {
         if (!customerId) continue
         const first = msg.attachments?.[0]
         const contentType = first ? attachmentContentType(first.type) : 'text'
-        const label = first ? attachmentLabel(first) : null
+        // Rumbo (RUMBO.md, cambio 14): stickers and GIFs say so, so the bot never takes one for a receipt
+        const label = first ? stickerLabel(first) ?? attachmentLabel(first) : null
         const mediaUrl = first && contentType !== 'text' ? first.payload?.url ?? null : null
         const text = msg.is_deleted
           ? '[Mensaje eliminado]'

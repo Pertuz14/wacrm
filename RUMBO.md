@@ -123,8 +123,17 @@ Manual completo: `web/simadi/docs/cierre-whatsapp.md` (en el repositorio de la p
 - **Qué hace:** al crear el enlace de pago, `withCheckoutLink` lee ese código con `conversationSchoolRef` (ya existía en `src/lib/leads/school-ref.ts`) y lo manda como `colegio`. La plataforma lo valida, cobra con el 10 % y atribuye la venta al colegio. Si no hay código, se manda lo mismo de siempre.
 - **Archivos:** `src/lib/rumbo/checkout-link.ts` (+ prueba en `checkout-link.test.ts`). Sin migración.
 
+### 14. Stickers de Instagram marcados como «[Sticker]» (25-nov-2026)
+- **Qué pasaba:** un sticker de Instagram llegaba al bot como «el cliente envió una imagen» y, después del enlace de pago,
+  el bot lo tomó por un comprobante (pidió el registro y salió el aviso «Pago por verificar» en Telegram).
+- **Qué hace:** si Meta marca el adjunto como sticker o GIF (`type` `sticker` o `animated_image`, o `payload.sticker_id`),
+  el mensaje lleva el texto «[Sticker]»: lo ve la bandeja y lo ve el bot, que tiene la regla de no tratarlo como pago.
+  Sigue siendo una imagen en la bandeja. El arreglo de fondo está en el prompt (después del enlace, una imagen no es un pago).
+- **Archivos:** nuevo `src/lib/rumbo/instagram-sticker.ts` (+ prueba). En `src/lib/instagram/webhook-parse.ts`: 1 import y
+  1 línea (la etiqueta del adjunto, marcada).
+
 ### Pruebas
-`npx vitest run src/lib/rumbo` (24 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
+`npx vitest run src/lib/rumbo` (27 pruebas) y la suite completa `npm test`. `npx tsc --noEmit` sin errores.
 
 ### Para activarlo (lo hace Gabriel, en este orden)
 1. Publicar el CRM con esta rama (con su «sí»).
